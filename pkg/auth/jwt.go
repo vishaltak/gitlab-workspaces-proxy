@@ -37,6 +37,10 @@ func validateJwt(signingKey, token string) bool {
 	tkn, err := jwt.ParseWithClaims(token, &claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(signingKey), nil
 	})
+	if err != nil {
+		return false
+	}
+
 	if !tkn.Valid {
 		return false
 	}

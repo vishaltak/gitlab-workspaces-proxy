@@ -3,14 +3,13 @@ package config
 import (
 	"os"
 
-	"gitlab.com/remote-development/auth-proxy/auth"
-	"gitlab.com/remote-development/auth-proxy/upstream"
+	"gitlab.com/remote-development/auth-proxy/pkg/auth"
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Auth      auth.AuthConfig        `yaml:"auth"`
-	Upstreams []upstream.HostMapping `yaml:"upstreams"`
+	Auth    auth.AuthConfig `yaml:"auth"`
+	BaseUrl string          `yaml:"base_url"`
 }
 
 func LoadConfig(filename string) (*Config, error) {
