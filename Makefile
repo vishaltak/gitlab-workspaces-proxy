@@ -8,7 +8,11 @@ test:
 
 .PHONY: run
 run: build
-	./proxy --config ./sample_config.yaml
+	./proxy --config ./sample_config.yaml --kubeconfig $$HOME/.kube/config
+
+.PHONY: docker
+docker:
+	docker build --platform=linux/amd64 -t patnaikshekhar/workspace-proxy:1.1 -f ./deploy/Dockerfile .
 
 .PHONY: run-backends
 run-backends:

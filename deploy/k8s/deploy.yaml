@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-proxy
+  labels:
+    app: workspace-proxy
+spec:
+  selector:
+    matchLabels:
+      app: workspace-proxy
+  template:
+    metadata:
+      labels:
+        app: workspace-proxy
+    spec:
+      containers:
+      - name: proxy
+        image: patnaikshekhar/workspace-proxy:1.1
+        imagePullPolicy: Always
+        command:
+        - ./proxy
+        - -config
+        - /app/config/config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+      volumes:
+      - name: config
+        secret:
+          secretName: workspace-proxy
+      serviceAccount: workspace-proxy

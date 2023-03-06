@@ -4,86 +4,85 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"os"
 
-	"github.com/fsnotify/fsnotify"
-	"gitlab.com/remote-development/auth-proxy/config"
-	"gitlab.com/remote-development/auth-proxy/server"
+	"gitlab.com/remote-development/auth-proxy/pkg/auth"
+	"gitlab.com/remote-development/auth-proxy/pkg/config"
+	"gitlab.com/remote-development/auth-proxy/pkg/k8s"
+	"gitlab.com/remote-development/auth-proxy/pkg/server"
+	"gitlab.com/remote-development/auth-proxy/pkg/upstream"
+	"go.uber.org/zap"
+	v1 "k8s.io/api/core/v1"
 )
 
 func main() {
 
 	port := flag.Int("port", 9876, "Port on which to listen")
 	configFile := flag.String("config", "", "The config file to use")
+	kubeconfig := flag.String("kubeconfig", "", "The kubernetes config file")
 
 	flag.Parse()
 
-	configChannel := make(chan config.Config)
+	cfg, err := config.LoadConfig(*configFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading config file %s", err)
+		os.Exit(-1)
+	}
 
 	ctx := context.Background()
-	err := readConfigChange(ctx, *configFile, configChannel)
+
+	k8sClient, err := k8s.New(*kubeconfig)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating kubernetes client %s", err)
+		os.Exit(-1)
+	}
+
+	logger, err := zap.NewProduction()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating logger %s", err)
+		os.Exit(-1)
+	}
+	defer logger.Sync()
 
 	opts := &server.ServerOptions{
-		Port:          *port,
-		ConfigChannel: configChannel,
+		Port:       *port,
+		Middleware: auth.NewMiddleware(&cfg.Auth),
+		Logger:     logger,
 	}
 
 	s := server.New(opts)
+
+	err = k8sClient.GetService(ctx, func(action k8s.InformerAction, svc *v1.Service) {
+		workspaceID := svc.Labels[k8s.WorkspaceServiceLabel]
+		workspaceHost := fmt.Sprintf("%s.%s", workspaceID, cfg.BaseUrl)
+
+		switch action {
+		case k8s.InformerActionAdd:
+			addPorts(workspaceHost, s, svc)
+		case k8s.InformerActionUpdate:
+			addPorts(workspaceHost, s, svc)
+		case k8s.InformerActionDelete:
+			s.DeleteUpstream(workspaceHost)
+		}
+	})
+
 	err = s.Start(ctx)
 	if err != nil {
 		fmt.Printf("Could not start server %s", err)
 	}
 }
 
-func readConfigChange(ctx context.Context, filename string, notificationChannel chan<- config.Config) error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-
-	// Start listening for events.
-	go func() {
-		defer watcher.Close()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Has(fsnotify.Write) {
-					log.Println("Config change detected")
-					config, err := config.LoadConfig(filename)
-					if err != nil {
-						log.Printf("Error reading config file modification %s", err)
-					} else {
-						notificationChannel <- *config
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Println("error in watching for config changes:", err)
-			}
+func addPorts(workspaceHost string, s *server.Server, svc *v1.Service) {
+	for i, port := range svc.Spec.Ports {
+		h := workspaceHost
+		if i != 0 {
+			h = fmt.Sprintf("%d-%s", port.Port, workspaceHost)
 		}
-	}()
-
-	// Add a path.
-	err = watcher.Add(filename)
-	if err != nil {
-		return err
+		s.AddUpstream(upstream.HostMapping{
+			Host:            h,
+			BackendPort:     port.Port,
+			Backend:         fmt.Sprintf("%s.%s", svc.ObjectMeta.Name, svc.ObjectMeta.Namespace),
+			BackendProtocol: "http",
+		})
 	}
-
-	config, err := config.LoadConfig(filename)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		notificationChannel <- *config
-	}()
-
-	return nil
 }

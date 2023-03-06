@@ -2,7 +2,6 @@ package auth
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -15,7 +14,6 @@ const (
 func checkIfValidCookieExists(r *http.Request, config *AuthConfig) bool {
 	cookie, err := r.Cookie(SessionCookieName)
 	if err != nil {
-		log.Printf("Error checking cookie %s", err)
 		return false
 	}
 
