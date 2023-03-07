@@ -2,10 +2,11 @@ package auth
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 type AuthConfig struct {
@@ -18,7 +19,7 @@ type AuthConfig struct {
 
 type HttpMiddleware func(http.Handler) http.Handler
 
-func NewMiddleware(config *AuthConfig) HttpMiddleware {
+func NewMiddleware(log *zap.Logger, config *AuthConfig) HttpMiddleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -27,32 +28,32 @@ func NewMiddleware(config *AuthConfig) HttpMiddleware {
 				if authCode, ok := r.URL.Query()["code"]; ok {
 					token, err := getToken(r.Context(), config, authCode[0])
 					if err != nil {
-						errorResponse(fmt.Errorf("error getting token %s", err), w)
+						errorResponse(log, fmt.Errorf("error getting token %s", err), w)
 						return
 					}
 
 					state := r.URL.Query().Get("state")
 					if state == "" {
-						errorResponse(fmt.Errorf("state not present in request"), w)
+						errorResponse(log, fmt.Errorf("state not present in request"), w)
 						return
 					}
 
 					workspaceName, err := getWorkspaceName(state)
 					if err != nil {
-						errorResponse(fmt.Errorf("could not parse workspace from host %s", err), w)
+						errorResponse(log, fmt.Errorf("could not parse workspace from host %s", err), w)
 						return
 					}
 
 					username, err := checkAuthorization(config, token.AccessToken, workspaceName)
 					if err != nil {
-						errorResponse(fmt.Errorf("could not authorize request %s", err), w)
+						errorResponse(log, fmt.Errorf("could not authorize request %s", err), w)
 						return
 					}
 
 					// Create JWT for cookie
 					signedJwt, err := generateJwt(config.SigningKey, username, token.ExpiresIn)
 					if err != nil {
-						errorResponse(fmt.Errorf("could not generate jwt %s", err), w)
+						errorResponse(log, fmt.Errorf("could not generate jwt %s", err), w)
 						return
 					}
 
@@ -63,6 +64,9 @@ func NewMiddleware(config *AuthConfig) HttpMiddleware {
 					setCookie(w, signedJwt, r.Host, token.ExpiresIn)
 
 					http.Redirect(w, r, stateUri, http.StatusTemporaryRedirect)
+					return
+				} else {
+					errorResponse(log, fmt.Errorf("could not find auth code"), w)
 					return
 				}
 			}
@@ -95,9 +99,9 @@ func getWorkspaceName(state string) (string, error) {
 	return hostElements[0], nil
 }
 
-func errorResponse(err error, w http.ResponseWriter) {
+func errorResponse(log *zap.Logger, err error, w http.ResponseWriter) {
 	w.WriteHeader(http.StatusBadRequest)
-	log.Println(err)
+	log.Error("error processing request", zap.Error(err))
 }
 
 func redirectToAuthUrl(config *AuthConfig, w http.ResponseWriter, r *http.Request) {
@@ -108,7 +112,7 @@ func redirectToAuthUrl(config *AuthConfig, w http.ResponseWriter, r *http.Reques
 }
 
 func isRedirectUri(config *AuthConfig, r *http.Request) bool {
-	uri := fmt.Sprintf("http://%s%s%s", r.URL.Scheme, r.Host, r.URL.Path)
+	uri := fmt.Sprintf("http://%s%s", r.Host, r.URL.Path)
 	return uri == config.RedirectUri
 }
 

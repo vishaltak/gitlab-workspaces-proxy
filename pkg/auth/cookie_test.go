@@ -26,17 +26,17 @@ func TestCheckIfValidCookieExists(t *testing.T) {
 		},
 		{
 			description: "When a cookie exists but is invalid returns false",
-			request:     generateRequestWithCookie("xyz"),
+			request:     generateRequestWithCookie("xyz", "http://my.workspace.com"),
 			expected:    false,
 		},
 		{
 			description: "When a valid token exists returns true",
-			request:     generateRequestWithCookie(generateToken(t, 1)),
+			request:     generateRequestWithCookie(generateToken(t, 1), "http://my.workspace.com"),
 			expected:    true,
 		},
 		{
 			description: "When the token is expired returns false",
-			request:     generateRequestWithCookie(generateToken(t, -1)),
+			request:     generateRequestWithCookie(generateToken(t, -1), "http://my.workspace.com"),
 			expected:    false,
 		},
 	}
@@ -50,9 +50,11 @@ func TestCheckIfValidCookieExists(t *testing.T) {
 
 }
 
-func generateRequestWithCookie(token string) *http.Request {
+func generateRequestWithCookie(token string, url string) *http.Request {
 	recorder := httptest.NewRecorder()
 	setCookie(recorder, token, "example.com", 1)
-	request := &http.Request{Header: http.Header{"Cookie": recorder.HeaderMap["Set-Cookie"]}}
+
+	request := httptest.NewRequest(http.MethodGet, url, nil)
+	request.Header = http.Header{"Cookie": recorder.HeaderMap["Set-Cookie"]}
 	return request
 }
