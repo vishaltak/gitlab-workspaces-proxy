@@ -33,6 +33,10 @@ func New(opts *ServerOptions) *Server {
 	}
 }
 
+func (s *Server) ShowUpstreams() map[string]upstream.HostMapping {
+	return s.upstreams
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.upstreamLock.RLock()
 	upstreams := s.upstreams
@@ -40,19 +44,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	requestHost := strings.Split(r.Host, ":")[0]
 
-	for _, upstream := range upstreams {
-		if upstream.Host == requestHost {
-			u, err := url.Parse(fmt.Sprintf("%s://%s:%d", upstream.BackendProtocol, upstream.Backend, upstream.BackendPort))
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				s.opts.Logger.Info("Error in parsing url", zap.String("url", u.String()), zap.Error(err))
-				return
-			}
-
-			proxy := httputil.NewSingleHostReverseProxy(u)
-			proxy.ServeHTTP(w, r)
+	if upstream, ok := upstreams[requestHost]; ok && upstream.Host == requestHost {
+		u, err := url.Parse(fmt.Sprintf("%s://%s:%d", upstream.BackendProtocol, upstream.Backend, upstream.BackendPort))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			s.opts.Logger.Info("Error in parsing url", zap.String("url", u.String()), zap.Error(err))
 			return
 		}
+
+		proxy := httputil.NewSingleHostReverseProxy(u)
+		proxy.ServeHTTP(w, r)
+		return
 	}
 
 	w.WriteHeader(http.StatusNotFound)
@@ -106,4 +108,5 @@ func (s *Server) DeleteUpstream(host string) {
 	s.upstreamLock.Lock()
 	defer s.upstreamLock.Unlock()
 	delete(s.upstreams, host)
+	s.opts.Logger.Info("Upstream removed", zap.String("host", host))
 }

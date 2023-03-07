@@ -4,7 +4,7 @@ build:
 
 .PHONY: test
 test:
-	go test -v ./...
+	go test -race -cover -v ./...
 
 .PHONY: run
 run: build

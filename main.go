@@ -46,7 +46,7 @@ func main() {
 
 	opts := &server.ServerOptions{
 		Port:       *port,
-		Middleware: auth.NewMiddleware(&cfg.Auth),
+		Middleware: auth.NewMiddleware(logger, &cfg.Auth),
 		Logger:     logger,
 	}
 
