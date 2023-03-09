@@ -40,6 +40,7 @@ func TestValidateJwt(t *testing.T) {
 }
 
 func generateToken(t *testing.T, expires int) string {
+	t.Helper()
 	tkn, err := generateJwt(signingKey, "test", expires)
 	require.Nil(t, err)
 

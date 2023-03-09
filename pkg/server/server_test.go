@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"gitlab.com/remote-development/auth-proxy/pkg/upstream"
@@ -16,9 +17,8 @@ import (
 )
 
 func TestStartServer(t *testing.T) {
-
 	upstreamSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello World"))
+		_, _ = w.Write([]byte("Hello World"))
 	}))
 
 	u, err := url.Parse(upstreamSrv.URL)
@@ -106,10 +106,15 @@ func TestStartServer(t *testing.T) {
 				s.DeleteUpstream(u)
 			}
 
-			go s.Start(ctx)
+			go func() {
+				err := s.Start(ctx)
+				require.Nil(t, err)
+			}()
+			time.Sleep(2 * time.Second)
 
 			res, err := http.Get(fmt.Sprintf("http://localhost:%d", tr.port))
 			require.Nil(t, err)
+			defer res.Body.Close()
 
 			result, err := io.ReadAll(res.Body)
 			require.Nil(t, err)

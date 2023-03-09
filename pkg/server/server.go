@@ -58,11 +58,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNotFound)
-	w.Write([]byte("Workspace not found"))
+	_, _ = w.Write([]byte("Workspace not found"))
 }
 
 func (s *Server) Start(ctx context.Context) error {
-
 	srv := &http.Server{
 		Handler: s,
 	}
@@ -71,7 +70,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	eg.Go(func() error {
 		<-groupCtx.Done()
-		if err := srv.Shutdown(context.Background()); err != nil {
+		if err := srv.Shutdown(context.Background()); err != nil { //nolint:golint,contextcheck
 			return err
 		}
 		return nil

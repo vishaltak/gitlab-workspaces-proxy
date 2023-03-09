@@ -2,3 +2,5 @@ sample_config.yaml
 .idea
 .DS_Store
 proxy
+bin
+coverage.*

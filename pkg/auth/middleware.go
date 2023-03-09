@@ -12,19 +12,18 @@ import (
 type AuthConfig struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
-	RedirectUri  string `yaml:"redirect_uri"`
+	RedirectURI  string `yaml:"redirect_uri"`
 	Host         string `yaml:"host"`
 	SigningKey   string `yaml:"signing_key"`
 }
 
-type HttpMiddleware func(http.Handler) http.Handler
+type HTTPMiddleware func(http.Handler) http.Handler
 
-func NewMiddleware(log *zap.Logger, config *AuthConfig) HttpMiddleware {
+func NewMiddleware(log *zap.Logger, config *AuthConfig) HTTPMiddleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 			// Check path if callback then get token and set cookie
-			if isRedirectUri(config, r) {
+			if isRedirectURI(config, r) {
 				if authCode, ok := r.URL.Query()["code"]; ok {
 					token, err := getToken(r.Context(), config, authCode[0])
 					if err != nil {
@@ -58,12 +57,12 @@ func NewMiddleware(log *zap.Logger, config *AuthConfig) HttpMiddleware {
 					}
 
 					// Redirect to url from state
-					stateUri, _ := url.QueryUnescape(state)
+					stateURI, _ := url.QueryUnescape(state)
 
 					// Write Cookie
 					setCookie(w, signedJwt, r.Host, token.ExpiresIn)
 
-					http.Redirect(w, r, stateUri, http.StatusTemporaryRedirect)
+					http.Redirect(w, r, stateURI, http.StatusTemporaryRedirect)
 					return
 				} else {
 					errorResponse(log, fmt.Errorf("could not find auth code"), w)
@@ -73,7 +72,7 @@ func NewMiddleware(log *zap.Logger, config *AuthConfig) HttpMiddleware {
 
 			// Check if cookie is already present
 			if !checkIfValidCookieExists(r, config) {
-				redirectToAuthUrl(config, w, r)
+				redirectToAuthURL(config, w, r)
 				return
 			}
 
@@ -83,12 +82,12 @@ func NewMiddleware(log *zap.Logger, config *AuthConfig) HttpMiddleware {
 }
 
 func getWorkspaceName(state string) (string, error) {
-	stateUrl, err := url.QueryUnescape(state)
+	stateURL, err := url.QueryUnescape(state)
 	if err != nil {
 		return "", err
 	}
 
-	u, err := url.Parse(stateUrl)
+	u, err := url.Parse(stateURL)
 	if err != nil {
 		return "", err
 	}
@@ -104,16 +103,16 @@ func errorResponse(log *zap.Logger, err error, w http.ResponseWriter) {
 	log.Error("error processing request", zap.Error(err))
 }
 
-func redirectToAuthUrl(config *AuthConfig, w http.ResponseWriter, r *http.Request) {
+func redirectToAuthURL(config *AuthConfig, w http.ResponseWriter, r *http.Request) {
 	// Calculate state based on current host
 	state := url.QueryEscape(fmt.Sprintf("http://%s%s", r.Host, r.URL.Path))
-	authUrl := fmt.Sprintf("%s/oauth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile&state=%s", config.Host, config.ClientID, config.RedirectUri, state)
-	http.Redirect(w, r, authUrl, http.StatusTemporaryRedirect)
+	authURL := fmt.Sprintf("%s/oauth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile&state=%s", config.Host, config.ClientID, config.RedirectURI, state)
+	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
 
-func isRedirectUri(config *AuthConfig, r *http.Request) bool {
+func isRedirectURI(config *AuthConfig, r *http.Request) bool {
 	uri := fmt.Sprintf("http://%s%s", r.Host, r.URL.Path)
-	return uri == config.RedirectUri
+	return uri == config.RedirectURI
 }
 
 func checkAuthorization(config *AuthConfig, accessToken string, workspace string) (string, error) {

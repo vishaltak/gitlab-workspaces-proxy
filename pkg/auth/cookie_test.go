@@ -9,7 +9,6 @@ import (
 )
 
 func TestCheckIfValidCookieExists(t *testing.T) {
-
 	config := &AuthConfig{
 		SigningKey: "abc",
 	}
@@ -47,7 +46,6 @@ func TestCheckIfValidCookieExists(t *testing.T) {
 			require.Equal(t, tr.expected, result)
 		})
 	}
-
 }
 
 func generateRequestWithCookie(token string, url string) *http.Request {
@@ -55,6 +53,9 @@ func generateRequestWithCookie(token string, url string) *http.Request {
 	setCookie(recorder, token, "example.com", 1)
 
 	request := httptest.NewRequest(http.MethodGet, url, nil)
-	request.Header = http.Header{"Cookie": recorder.HeaderMap["Set-Cookie"]}
+	result := recorder.Result()
+	defer result.Body.Close()
+
+	request.Header = http.Header{"Cookie": result.Header["Set-Cookie"]}
 	return request
 }

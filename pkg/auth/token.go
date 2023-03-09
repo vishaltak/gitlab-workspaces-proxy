@@ -12,7 +12,7 @@ import (
 func getToken(ctx context.Context, config *AuthConfig, code string) (*token, error) {
 	u := fmt.Sprintf("%s/oauth/token", config.Host)
 	form := url.Values{
-		"redirect_uri":  []string{config.RedirectUri},
+		"redirect_uri":  []string{config.RedirectURI},
 		"grant_type":    []string{"authorization_code"},
 		"code":          []string{code},
 		"client_id":     []string{config.ClientID},
@@ -31,6 +31,7 @@ func getToken(ctx context.Context, config *AuthConfig, code string) (*token, err
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 
 	var tkn token
 	err = json.NewDecoder(res.Body).Decode(&tkn)
@@ -43,7 +44,7 @@ func getToken(ctx context.Context, config *AuthConfig, code string) (*token, err
 
 type token struct {
 	AccessToken  string `json:"access_token"`
-	IdToken      string `json:"id_token"`
+	IDToken      string `json:"id_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresIn    int    `json:"expires_in"`
 }

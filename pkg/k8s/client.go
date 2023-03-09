@@ -64,10 +64,10 @@ func (c *KubernetesClient) GetService(ctx context.Context, callback func(Informe
 
 	go factory.Start(stopper)
 	if !cache.WaitForCacheSync(stopper, informer.HasSynced) {
-		return fmt.Errorf("Timed out waiting for caches to sync")
+		return fmt.Errorf("timed out waiting for caches to sync")
 	}
 
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			svc := obj.(*v1.Service)
 			callback(InformerActionAdd, svc)
@@ -81,6 +81,9 @@ func (c *KubernetesClient) GetService(ctx context.Context, callback func(Informe
 			callback(InformerActionUpdate, svc)
 		},
 	})
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

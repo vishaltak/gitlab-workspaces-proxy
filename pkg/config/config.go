@@ -9,7 +9,7 @@ import (
 
 type Config struct {
 	Auth    auth.AuthConfig `yaml:"auth"`
-	BaseUrl string          `yaml:"base_url"`
+	BaseURL string          `yaml:"base_url"`
 }
 
 func LoadConfig(filename string) (*Config, error) {
