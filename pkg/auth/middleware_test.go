@@ -55,24 +55,25 @@ func TestRedirectToAuthUrl(t *testing.T) {
 	config := &AuthConfig{
 		Host:        "http://my.gitlab.com",
 		ClientID:    "CLIENT_ID",
-		RedirectUri: "http://workspaces.com/callback",
+		RedirectURI: "http://workspaces.com/callback",
 	}
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "http://myworkspace.workspace.com", nil)
 
-	redirectToAuthUrl(config, recorder, request)
+	redirectToAuthURL(config, recorder, request)
+	result := recorder.Result()
+	defer result.Body.Close()
 
-	require.Equal(t, http.StatusTemporaryRedirect, recorder.Result().StatusCode)
+	require.Equal(t, http.StatusTemporaryRedirect, result.StatusCode)
 
-	expectedUrl := "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile&state=http%3A%2F%2Fmyworkspace.workspace.com"
-	require.Equal(t, expectedUrl, recorder.Result().Header["Location"][0])
+	expectedURL := "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile&state=http%3A%2F%2Fmyworkspace.workspace.com"
+	require.Equal(t, expectedURL, result.Header["Location"][0])
 }
 
 func TestIsRedirectUri(t *testing.T) {
-
 	config := &AuthConfig{
-		RedirectUri: "http://workspaces.com/callback",
+		RedirectURI: "http://workspaces.com/callback",
 	}
 
 	tt := []struct {
@@ -94,7 +95,7 @@ func TestIsRedirectUri(t *testing.T) {
 
 	for _, tr := range tt {
 		t.Run(tr.description, func(t *testing.T) {
-			result := isRedirectUri(config, tr.request)
+			result := isRedirectURI(config, tr.request)
 			require.Equal(t, tr.expectedResult, result)
 		})
 	}
@@ -148,14 +149,14 @@ func TestMiddleware(t *testing.T) {
 		data, err := json.Marshal(result)
 		require.Nil(t, err)
 
-		w.Write(data)
+		_, _ = w.Write(data)
 	}))
 
 	config := &AuthConfig{
 		Host:         svr.URL,
 		ClientID:     "CLIENT_ID",
 		ClientSecret: "CLIENT_SECRET",
-		RedirectUri:  "http://workspaces.com/callback",
+		RedirectURI:  "http://workspaces.com/callback",
 		SigningKey:   "abc",
 	}
 
@@ -164,13 +165,15 @@ func TestMiddleware(t *testing.T) {
 			recorder := httptest.NewRecorder()
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte("Hello World"))
+				_, _ = w.Write([]byte("Hello World"))
 			})
 
 			middleware := NewMiddleware(logger, config)(handler)
 			middleware.ServeHTTP(recorder, tr.request)
 
-			require.Equal(t, tr.expectedStatusCode, recorder.Result().StatusCode)
+			result := recorder.Result()
+			defer result.Body.Close()
+			require.Equal(t, tr.expectedStatusCode, result.StatusCode)
 		})
 	}
 }

@@ -11,19 +11,19 @@ func TestLoadConfig(t *testing.T) {
 		description          string
 		filename             string
 		expectedError        bool
-		expectedAuthClientId string
+		expectedAuthClientID string
 	}{
 		{
 			description:          "When invalid filename is passed throws error",
 			filename:             "./fixtures/error.yaml",
 			expectedError:        true,
-			expectedAuthClientId: "",
+			expectedAuthClientID: "",
 		},
 		{
 			description:          "When a valid filename is passed loads config",
 			filename:             "./fixtures/sample.yaml",
 			expectedError:        false,
-			expectedAuthClientId: "CLIENT_ID",
+			expectedAuthClientID: "CLIENT_ID",
 		},
 	}
 
@@ -36,8 +36,7 @@ func TestLoadConfig(t *testing.T) {
 			}
 
 			require.Nil(t, err)
-			require.Equal(t, tr.expectedAuthClientId, config.Auth.ClientID)
+			require.Equal(t, tr.expectedAuthClientID, config.Auth.ClientID)
 		})
 	}
-
 }

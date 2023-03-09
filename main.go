@@ -16,7 +16,6 @@ import (
 )
 
 func main() {
-
 	port := flag.Int("port", 9876, "Port on which to listen")
 	configFile := flag.String("config", "", "The config file to use")
 	kubeconfig := flag.String("kubeconfig", "", "The kubernetes config file")
@@ -42,7 +41,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error creating logger %s", err)
 		os.Exit(-1)
 	}
-	defer logger.Sync()
+	defer func() {
+		err = logger.Sync()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error syncing logger %s", err)
+			return
+		}
+	}()
 
 	opts := &server.ServerOptions{
 		Port:       *port,
@@ -54,7 +59,7 @@ func main() {
 
 	err = k8sClient.GetService(ctx, func(action k8s.InformerAction, svc *v1.Service) {
 		workspaceID := svc.Labels[k8s.WorkspaceServiceLabel]
-		workspaceHost := fmt.Sprintf("%s.%s", workspaceID, cfg.BaseUrl)
+		workspaceHost := fmt.Sprintf("%s.%s", workspaceID, cfg.BaseURL)
 
 		switch action {
 		case k8s.InformerActionAdd:
@@ -65,10 +70,14 @@ func main() {
 			s.DeleteUpstream(workspaceHost)
 		}
 	})
+	if err != nil {
+		logger.Error("Could not start informer", zap.Error(err))
+		return
+	}
 
 	err = s.Start(ctx)
 	if err != nil {
-		fmt.Printf("Could not start server %s", err)
+		logger.Error("Could not start server", zap.Error(err))
 	}
 }
 

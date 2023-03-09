@@ -25,7 +25,6 @@ func checkIfValidCookieExists(r *http.Request, config *AuthConfig) bool {
 }
 
 func setCookie(w http.ResponseWriter, value string, domain string, expires int) {
-
 	// Remove port
 	domainElements := strings.Split(domain, ":")
 	cookie := &http.Cookie{

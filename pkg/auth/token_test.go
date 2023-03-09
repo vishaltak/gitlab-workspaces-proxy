@@ -36,7 +36,6 @@ func TestGetToken(t *testing.T) {
 	for _, tr := range tt {
 		t.Run(tr.description, func(t *testing.T) {
 			svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 				code := r.FormValue("code")
 				if code == "INVALID" {
 					w.WriteHeader(http.StatusInternalServerError)
@@ -50,7 +49,7 @@ func TestGetToken(t *testing.T) {
 				data, err := json.Marshal(result)
 				require.Nil(t, err)
 
-				w.Write(data)
+				_, _ = w.Write(data)
 			}))
 
 			config := &AuthConfig{
@@ -67,5 +66,4 @@ func TestGetToken(t *testing.T) {
 			require.Equal(t, tr.expectedAccessToken, result.AccessToken)
 		})
 	}
-
 }
