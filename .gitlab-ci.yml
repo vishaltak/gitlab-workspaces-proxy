@@ -13,7 +13,7 @@ default:
 
 stages:
   - test
-  # - release
+  - release
 
 
 .go-cache:
@@ -61,3 +61,13 @@ run_tests:
   artifacts:
     reports:
       junit: coverage.xml
+
+build:
+  image: docker:20.10.16
+  stage: release
+  services:
+    - docker:20.10.16-dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY/remote-development/auth-proxy/workspace-auth-proxy:$CI_COMMIT_SHORT_SHA .
+    - docker push $CI_REGISTRY/remote-development/auth-proxy/workspace-auth-proxy:$CI_COMMIT_SHORT_SHA
