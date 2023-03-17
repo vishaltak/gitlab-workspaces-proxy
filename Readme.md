@@ -14,7 +14,7 @@ kubectl create ns gitlab-workspaces
 2. Register an app on your GitLab instance
 
 Follow the instuctions [here](https://docs.gitlab.com/ee/integration/oauth_provider.html) to register an oauth application.
-Set the redirect Uri to http://hostname:port/auth/callback
+Set the redirect URI to http://hostname:port/auth/callback
 Make a note of the client id and secret generated
 
 3. Set environment variables for secret
@@ -35,7 +35,6 @@ auth:
   host: $HOST_NAME
   redirect_uri: $REDIRECT_URI
   signing_key: $SIGNING_KEY
-base_url: "workspaces.localdev.me"
 EOF
 )
 
@@ -49,3 +48,48 @@ kubectl create secret generic workspace-proxy -n gitlab-workspaces \
 kubectl apply -k ./deploy/k8s -n gitlab-workspaces
 ```
 
+6. Create a DNS entry in core dns to enable the auth proxy to reach gdk from your cluster
+
+```sh
+export HOST_NAME_ONLY=[Host name without port]
+
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+          pods insecure
+          fallthrough in-addr.arpa ip6.arpa
+        }
+        hosts /etc/coredns/NodeHosts {
+          ttl 60
+          reload 15s
+          fallthrough
+        }
+        rewrite name $HOST_NAME_ONLY host.docker.internal
+        prometheus :9153
+        forward . /etc/resolv.conf
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+    import /etc/coredns/custom/*.server
+  NodeHosts: |
+    192.168.1.107 lima-rancher-desktop
+kind: ConfigMap
+metadata:
+  annotations:
+    objectset.rio.cattle.io/id: ""
+    objectset.rio.cattle.io/owner-gvk: k3s.cattle.io/v1, Kind=Addon
+    objectset.rio.cattle.io/owner-name: coredns
+    objectset.rio.cattle.io/owner-namespace: kube-system
+  name: coredns
+  namespace: kube-system
+EOF
+
+```
