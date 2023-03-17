@@ -58,17 +58,37 @@ func TestRedirectToAuthUrl(t *testing.T) {
 		RedirectURI: "http://workspaces.com/callback",
 	}
 
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "http://myworkspace.workspace.com", nil)
+	tests := []struct {
+		description string
+		requestURI  string
+		expectedURL string
+	}{
+		{
+			description: "With hostname only",
+			requestURI:  "http://myworkspace.workspace.com",
+			expectedURL: "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile&state=http%3A%2F%2Fmyworkspace.workspace.com",
+		},
+		{
+			description: "With query string",
+			requestURI:  "http://myworkspace.workspace.com?tkn=pass",
+			expectedURL: "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile&state=http%3A%2F%2Fmyworkspace.workspace.com%3Ftkn%3Dpass",
+		},
+	}
 
-	redirectToAuthURL(config, recorder, request)
-	result := recorder.Result()
-	defer result.Body.Close()
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, tt.requestURI, nil)
 
-	require.Equal(t, http.StatusTemporaryRedirect, result.StatusCode)
+			redirectToAuthURL(config, recorder, request)
+			result := recorder.Result()
+			defer result.Body.Close()
 
-	expectedURL := "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile&state=http%3A%2F%2Fmyworkspace.workspace.com"
-	require.Equal(t, expectedURL, result.Header["Location"][0])
+			require.Equal(t, http.StatusTemporaryRedirect, result.StatusCode)
+
+			require.Equal(t, tt.expectedURL, result.Header["Location"][0])
+		})
+	}
 }
 
 func TestIsRedirectUri(t *testing.T) {

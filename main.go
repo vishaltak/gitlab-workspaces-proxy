@@ -15,6 +15,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
+const (
+	workspaceHostAnnotation = "remotedevelopment.gitlab/workspace-domain"
+)
+
 func main() {
 	port := flag.Int("port", 9876, "Port on which to listen")
 	configFile := flag.String("config", "", "The config file to use")
@@ -58,8 +62,7 @@ func main() {
 	s := server.New(opts)
 
 	err = k8sClient.GetService(ctx, func(action k8s.InformerAction, svc *v1.Service) {
-		workspaceID := svc.Labels[k8s.WorkspaceServiceLabel]
-		workspaceHost := fmt.Sprintf("%s.%s", workspaceID, cfg.BaseURL)
+		workspaceHost := svc.Annotations[workspaceHostAnnotation]
 
 		switch action {
 		case k8s.InformerActionAdd:

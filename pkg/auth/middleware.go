@@ -105,7 +105,11 @@ func errorResponse(log *zap.Logger, err error, w http.ResponseWriter) {
 
 func redirectToAuthURL(config *AuthConfig, w http.ResponseWriter, r *http.Request) {
 	// Calculate state based on current host
-	state := url.QueryEscape(fmt.Sprintf("http://%s%s", r.Host, r.URL.Path))
+	query := ""
+	if r.URL.RawQuery != "" {
+		query = fmt.Sprintf("?%s", r.URL.RawQuery)
+	}
+	state := url.QueryEscape(fmt.Sprintf("http://%s%s%s", r.Host, r.URL.Path, query))
 	authURL := fmt.Sprintf("%s/oauth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile&state=%s", config.Host, config.ClientID, config.RedirectURI, state)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
