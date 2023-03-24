@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"text/template"
 
 	"gitlab.com/remote-development/auth-proxy/pkg/auth"
 	"gitlab.com/remote-development/auth-proxy/pkg/config"
@@ -16,7 +19,7 @@ import (
 )
 
 const (
-	workspaceHostAnnotation = "remotedevelopment.gitlab/workspace-domain"
+	workspaceHostTemplateAnnotation = "remotedevelopment.gitlab/workspace-domain-template"
 )
 
 func main() {
@@ -62,15 +65,15 @@ func main() {
 	s := server.New(opts)
 
 	err = k8sClient.GetService(ctx, func(action k8s.InformerAction, svc *v1.Service) {
-		workspaceHost := svc.Annotations[workspaceHostAnnotation]
+		workspaceHostTemplate := svc.Annotations[workspaceHostTemplateAnnotation]
 
 		switch action {
 		case k8s.InformerActionAdd:
-			addPorts(workspaceHost, s, svc)
+			addPorts(workspaceHostTemplate, s, svc, logger)
 		case k8s.InformerActionUpdate:
-			addPorts(workspaceHost, s, svc)
+			addPorts(workspaceHostTemplate, s, svc, logger)
 		case k8s.InformerActionDelete:
-			s.DeleteUpstream(workspaceHost)
+			s.DeleteUpstream(workspaceHostTemplate)
 		}
 	})
 	if err != nil {
@@ -84,14 +87,21 @@ func main() {
 	}
 }
 
-func addPorts(workspaceHost string, s *server.Server, svc *v1.Service) {
-	for i, port := range svc.Spec.Ports {
-		h := workspaceHost
-		if i != 0 {
-			h = fmt.Sprintf("%d-%s", port.Port, workspaceHost)
+func addPorts(workspaceHostTemplate string, s *server.Server, svc *v1.Service, logger *zap.Logger) {
+	for _, port := range svc.Spec.Ports {
+		t, err := template.New("workspaceHostTemplate").Parse(workspaceHostTemplate)
+		if err != nil {
+			logger.Error("Could not parse domain template", zap.Error(err))
+			return
+		}
+		var h bytes.Buffer
+		err = t.Execute(&h, map[string]string{"port": strconv.Itoa(port.TargetPort.IntValue())})
+		if err != nil {
+			logger.Error("Could not parse domain template", zap.Error(err))
+			return
 		}
 		s.AddUpstream(upstream.HostMapping{
-			Host:            h,
+			Host:            h.String(),
 			BackendPort:     port.Port,
 			Backend:         fmt.Sprintf("%s.%s", svc.ObjectMeta.Name, svc.ObjectMeta.Namespace),
 			BackendProtocol: "http",
