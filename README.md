@@ -52,6 +52,10 @@ kubectl apply -k ./deploy/k8s -n gitlab-workspaces
 
 ```sh
 export HOST_NAME_ONLY=[Host name without port]
+export RANCHER_NODE_IP=$(
+  kubectl get nodes lima-rancher-desktop \
+    --output jsonpath="{.status.addresses[?(@.type=='InternalIP')].address}"
+)
 
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -80,7 +84,7 @@ data:
     }
     import /etc/coredns/custom/*.server
   NodeHosts: |
-    192.168.1.107 lima-rancher-desktop
+    $RANCHER_NODE_IP lima-rancher-desktop
 kind: ConfigMap
 metadata:
   annotations:
