@@ -56,6 +56,9 @@ export RANCHER_NODE_IP=$(
   kubectl get nodes lima-rancher-desktop \
     --output jsonpath="{.status.addresses[?(@.type=='InternalIP')].address}"
 )
+# Set it to host.docker.internal if you are running GDK on 127.0.0.1
+# If you are running on any other private IP, use that IP
+export GDK_IP=172.16.123.1
 
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -74,7 +77,7 @@ data:
           reload 15s
           fallthrough
         }
-        rewrite name $HOST_NAME_ONLY host.docker.internal
+        rewrite name $HOST_NAME_ONLY $GDK_IP
         prometheus :9153
         forward . /etc/resolv.conf
         cache 30
