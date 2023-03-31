@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: workspace-proxy
+  name: gitlab-workspaces-proxy
   labels:
-    app: workspace-proxy
+    app: gitlab-workspaces-proxy
 spec:
   selector:
     matchLabels:
-      app: workspace-proxy
+      app: gitlab-workspaces-proxy
   template:
     metadata:
       labels:
-        app: workspace-proxy
+        app: gitlab-workspaces-proxy
     spec:
       containers:
       - name: proxy
-        image: patnaikshekhar/workspace-proxy:1.1
+        image: registry.gitlab.com/gitlab-org/remote-development/gitlab-workspaces-proxy:0.1
         imagePullPolicy: Always
         command:
         - ./proxy
@@ -27,5 +27,5 @@ spec:
       volumes:
       - name: config
         secret:
-          secretName: workspace-proxy
-      serviceAccount: workspace-proxy
+          secretName: gitlab-workspaces-proxy
+      serviceAccount: gitlab-workspaces-proxy

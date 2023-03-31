@@ -1,4 +1,4 @@
-module gitlab.com/remote-development/auth-proxy
+module gitlab.com/remote-development/gitlab-workspaces-proxy
 
 go 1.18
 
