@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"gitlab.com/remote-development/auth-proxy/pkg/upstream"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )

@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"text/template"
 
-	"gitlab.com/remote-development/auth-proxy/pkg/auth"
-	"gitlab.com/remote-development/auth-proxy/pkg/config"
-	"gitlab.com/remote-development/auth-proxy/pkg/k8s"
-	"gitlab.com/remote-development/auth-proxy/pkg/server"
-	"gitlab.com/remote-development/auth-proxy/pkg/upstream"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/auth"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/config"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/k8s"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/server"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 )
