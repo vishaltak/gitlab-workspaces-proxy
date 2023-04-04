@@ -30,55 +30,65 @@ make
 
 2. Register an app on your GitLab instance
 
-    Follow the instructions [here](https://docs.gitlab.com/ee/integration/oauth_provider.html) to register an oauth application.
-    Set the redirect URI to http://hostname:port/auth/callback
-    Make a note of the client id and secret generated
+    - Follow the instructions [here](https://docs.gitlab.com/ee/integration/oauth_provider.html) to register an OAuth application.
+    - Set the redirect URI to `http://workspaces.localdev.me/auth/callback` .
+    - Set the scopes to `openid`, `profile`, `email` .
+    - Make a note of the client id and secret generated.
 
-3. Set environment variables for secret
-
-   ```sh
-    export CLIENT_ID=[your client id]
-    export CLIENT_SECRET=[your client secret]
-    export HOST_NAME=[url for GDK]
-    export REDIRECT_URI=http://workspaces.localdev.me/auth/callback
-    export SIGNING_KEY=[a random key consisting of letters, numbers and special chars]
-    ```
-
-4. Create the secret
+3. Create configuration secret for the proxy
 
     ```sh
+    export CLIENT_ID="your_application_id"
+    export CLIENT_SECRET="your_application_secret"
+    export GITLAB_URL="http://gdk.test:3000"
+    export REDIRECT_URI=http://workspaces.localdev.me/auth/callback
+    export SIGNING_KEY="a_random_key_consisting_of_letters_numbers_and_special_chars"
+
     SECRET_DATA=$(cat <<EOF
     auth:
       client_id: $CLIENT_ID
       client_secret: $CLIENT_SECRET
-      host: $HOST_NAME
+      host: $GITLAB_URL
       redirect_uri: $REDIRECT_URI
       signing_key: $SIGNING_KEY
     EOF
     )
-    
-    kubectl create secret generic workspace-proxy -n gitlab-workspaces \
-        --from-literal=config.yaml=$SECRET_DATA
+
+    kubectl create secret generic gitlab-workspaces-proxy -n gitlab-workspaces \
+      --from-literal=config.yaml=$SECRET_DATA
     ```
 
-5. Apply the manifests
+4. Apply the manifests
 
     ```sh
     kubectl apply -k ./deploy/k8s -n gitlab-workspaces
     ```
 
-6. Create a DNS entry in core dns to enable the auth proxy to reach gdk from your cluster
+5. Create a DNS entry in core dns to enable the auth proxy to reach gdk from your cluster
 
     ```sh
-    export HOST_NAME_ONLY=[Host name without port]
+    export GITLAB_HOST_WITHOUT_PORT=$(echo $GITLAB_URL | cut -d":" -f1 | cut -d "/" -f3)
     export RANCHER_NODE_IP=$(
       kubectl get nodes lima-rancher-desktop \
         --output jsonpath="{.status.addresses[?(@.type=='InternalIP')].address}"
     )
-    # Set it to host.docker.internal if you are running GDK on 127.0.0.1
-    # If you are running on any other private IP, use that IP
+    ```
+
+    If you are running GDK on 127.0.0.1, use [`host.docker.internal`](https://github.com/rancher-sandbox/rancher-desktop/issues/3686#issuecomment-1379539298)
+
+    ```sh
+    export GDK_IP=host.docker.internal
+    ```
+
+    If you are running on any other private IP, use that IP. Assuming that IP is `172.16.123.1`
+
+    ```sh
     export GDK_IP=172.16.123.1
-    
+    ```
+
+    Update CodeDNS to route all traffic from host `$GITLAB_HOST_WITHOUT_PORT` to the IP `$GDK_IP`
+
+    ```sh
     cat <<EOF | kubectl apply -f -
     apiVersion: v1
     data:
@@ -96,7 +106,7 @@ make
               reload 15s
               fallthrough
             }
-            rewrite name $HOST_NAME_ONLY $GDK_IP
+            rewrite name $GITLAB_HOST_WITHOUT_PORT $GDK_IP
             prometheus :9153
             forward . /etc/resolv.conf
             cache 30
