@@ -20,6 +20,20 @@ EOT
 make
 ```
 
+## Building and Publishing Container Image
+
+```shell
+# to build the image
+make docker-build
+
+# to publish the image
+make docker-publish
+```
+
+If you want to update the image version, change the configuration in the following places
+- `Makefile` - `CONTAINER_IMAGE_VERSION` variable
+- `deploy/k8s/deploy.yaml` - `image` attribute for the `proxy` container
+
 ## Installation Instructions
 
 1. Create a namespace

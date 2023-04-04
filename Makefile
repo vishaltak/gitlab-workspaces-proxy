@@ -1,5 +1,9 @@
 OS = $(shell uname | tr A-Z a-z)
 
+CONTAINER_IMAGE_NAME = registry.gitlab.com/gitlab-org/remote-development/gitlab-workspaces-proxy
+CONTAINER_IMAGE_VERSION = 0.1
+CONTAINER_IMAGE_NAME_WITH_VERSION = $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_VERSION)
+
 # Dependency versions
 GOTESTSUM_VERSION = 0.6.0
 
@@ -35,8 +39,14 @@ run: build
 coverage:
 	go tool cover -func coverage.txt
 
-docker:
-	@docker build --platform=linux/amd64 -t patnaikshekhar/workspace-proxy:1.1 -f ./deploy/Dockerfile .
+docker-login:
+	@docker login registry.gitlab.com
+
+docker-build:
+	@docker build --platform=linux/amd64 -t $(CONTAINER_IMAGE_NAME_WITH_VERSION) -f ./deploy/Dockerfile .
+
+docker-publish: docker-login docker-build
+	@docker push $(CONTAINER_IMAGE_NAME_WITH_VERSION)
 
 bin/gotestsum-${GOTESTSUM_VERSION}:
 	@mkdir -p bin
