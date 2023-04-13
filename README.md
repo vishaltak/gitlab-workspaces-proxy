@@ -81,7 +81,7 @@ If you want to update the image version, change the configuration in the followi
 5. Create a DNS entry in core dns to enable the auth proxy to reach gdk from your cluster
 
     ```sh
-    export GITLAB_HOST_WITHOUT_PORT=$(echo $GITLAB_URL | cut -d":" -f1 | cut -d "/" -f3)
+    export GITLAB_HOST_WITHOUT_PORT=$(echo $GITLAB_URL | cut -d":" -f2 | cut -d "/" -f3)
     export RANCHER_NODE_IP=$(
       kubectl get nodes lima-rancher-desktop \
         --output jsonpath="{.status.addresses[?(@.type=='InternalIP')].address}"
