@@ -11,6 +11,7 @@ import (
 
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/auth"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/config"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/gitlab"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/k8s"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/server"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
@@ -20,9 +21,10 @@ import (
 
 const (
 	workspaceHostTemplateAnnotation = "remotedevelopment.gitlab/workspace-domain-template"
+	workspaceIDAnnotation           = "remotedevelopment.gitlab/workspace-id"
 )
 
-func main() {
+func main() { //nolint:cyclop
 	port := flag.Int("port", 9876, "Port on which to listen")
 	configFile := flag.String("config", "", "The config file to use")
 	kubeconfig := flag.String("kubeconfig", "", "The kubernetes config file")
@@ -56,24 +58,39 @@ func main() {
 		}
 	}()
 
-	opts := &server.ServerOptions{
+	apiFactory := func(accessToken string) gitlab.API {
+		return gitlab.NewClient(accessToken, cfg.Auth.Host, gitlab.BearerTokenType)
+	}
+
+	upstreamTracker := upstream.NewTracker(logger)
+
+	opts := &server.Options{
 		Port:       *port,
-		Middleware: auth.NewMiddleware(logger, &cfg.Auth),
+		Middleware: auth.NewMiddleware(logger, &cfg.Auth, upstreamTracker, apiFactory),
 		Logger:     logger,
+		Tracker:    upstreamTracker,
 	}
 
 	s := server.New(opts)
 
 	err = k8sClient.GetService(ctx, func(action k8s.InformerAction, svc *v1.Service) {
 		workspaceHostTemplate := svc.Annotations[workspaceHostTemplateAnnotation]
+		workspaceID := svc.Annotations[workspaceIDAnnotation]
+
+		if workspaceID == "" {
+			logger.Info("workspace ID not available",
+				zap.String("service_name", svc.Name),
+				zap.String("service_namespace", svc.Namespace))
+			return
+		}
 
 		switch action {
 		case k8s.InformerActionAdd:
-			addPorts(workspaceHostTemplate, s, svc, logger)
+			addPorts(workspaceID, workspaceHostTemplate, upstreamTracker, svc, logger)
 		case k8s.InformerActionUpdate:
-			addPorts(workspaceHostTemplate, s, svc, logger)
+			addPorts(workspaceID, workspaceHostTemplate, upstreamTracker, svc, logger)
 		case k8s.InformerActionDelete:
-			s.DeleteUpstream(workspaceHostTemplate)
+			upstreamTracker.Delete(workspaceHostTemplate)
 		}
 	})
 	if err != nil {
@@ -87,7 +104,7 @@ func main() {
 	}
 }
 
-func addPorts(workspaceHostTemplate string, s *server.Server, svc *v1.Service, logger *zap.Logger) {
+func addPorts(workspaceID string, workspaceHostTemplate string, tracker *upstream.Tracker, svc *v1.Service, logger *zap.Logger) {
 	for _, port := range svc.Spec.Ports {
 		t, err := template.New("workspaceHostTemplate").Parse(workspaceHostTemplate)
 		if err != nil {
@@ -100,11 +117,13 @@ func addPorts(workspaceHostTemplate string, s *server.Server, svc *v1.Service, l
 			logger.Error("Could not parse domain template", zap.Error(err))
 			return
 		}
-		s.AddUpstream(upstream.HostMapping{
+
+		tracker.Add(upstream.HostMapping{
 			Host:            h.String(),
 			BackendPort:     port.Port,
 			Backend:         fmt.Sprintf("%s.%s", svc.ObjectMeta.Name, svc.ObjectMeta.Namespace),
 			BackendProtocol: "http",
+			WorkspaceID:     workspaceID,
 		})
 	}
 }

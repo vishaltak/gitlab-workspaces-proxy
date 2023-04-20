@@ -92,18 +92,20 @@ func TestStartServer(t *testing.T) {
 				})
 			}
 
-			s := New(&ServerOptions{
+			tracker := upstream.NewTracker(logger)
+			s := New(&Options{
 				Port:       tr.port,
 				Middleware: handler,
 				Logger:     logger,
+				Tracker:    tracker,
 			})
 
 			for _, u := range tr.upstreamsToAdd {
-				s.AddUpstream(u)
+				tracker.Add(u)
 			}
 
 			for _, u := range tr.upstreamsToRemove {
-				s.DeleteUpstream(u)
+				tracker.Delete(u)
 			}
 
 			go func() {

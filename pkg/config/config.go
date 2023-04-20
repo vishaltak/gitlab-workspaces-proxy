@@ -8,7 +8,7 @@ import (
 )
 
 type Config struct {
-	Auth auth.AuthConfig `yaml:"auth"`
+	Auth auth.Config `yaml:"auth"`
 }
 
 func LoadConfig(filename string) (*Config, error) {

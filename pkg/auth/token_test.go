@@ -52,7 +52,7 @@ func TestGetToken(t *testing.T) {
 				_, _ = w.Write(data)
 			}))
 
-			config := &AuthConfig{
+			config := &Config{
 				Host: svr.URL,
 			}
 
