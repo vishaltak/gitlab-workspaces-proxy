@@ -9,7 +9,7 @@ import (
 )
 
 func TestCheckIfValidCookieExists(t *testing.T) {
-	config := &AuthConfig{
+	config := &Config{
 		SigningKey: "abc",
 	}
 

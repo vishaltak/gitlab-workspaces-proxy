@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/gitlab"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
 	"go.uber.org/zap/zaptest"
 )
 
-func TestGetWorkspaceName(t *testing.T) {
+func TestGetHostnameFromState(t *testing.T) {
 	tt := []struct {
 		description    string
 		state          string
@@ -26,13 +28,13 @@ func TestGetWorkspaceName(t *testing.T) {
 		{
 			description:    "When a valid host name exists returns first part",
 			state:          "http://workspace1.example.com",
-			expectedResult: "workspace1",
+			expectedResult: "workspace1.example.com",
 		},
 	}
 
 	for _, tr := range tt {
 		t.Run(tr.description, func(t *testing.T) {
-			result, err := getWorkspaceName(tr.state)
+			result, err := getHostnameFromState(tr.state)
 			if tr.expectedError {
 				require.NotNil(t, err)
 				return
@@ -47,12 +49,12 @@ func TestGetWorkspaceName(t *testing.T) {
 func TestErrorResponse(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	logger := zaptest.NewLogger(t)
-	err := fmt.Errorf("New error occurred")
+	err := fmt.Errorf("new error occurred")
 	errorResponse(logger, err, recorder)
 }
 
 func TestRedirectToAuthUrl(t *testing.T) {
-	config := &AuthConfig{
+	config := &Config{
 		Host:        "http://my.gitlab.com",
 		ClientID:    "CLIENT_ID",
 		RedirectURI: "http://workspaces.com/callback",
@@ -66,12 +68,12 @@ func TestRedirectToAuthUrl(t *testing.T) {
 		{
 			description: "With hostname only",
 			requestURI:  "http://myworkspace.workspace.com",
-			expectedURL: "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile&state=http%3A%2F%2Fmyworkspace.workspace.com",
+			expectedURL: "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile api read_user&state=http%3A%2F%2Fmyworkspace.workspace.com",
 		},
 		{
 			description: "With query string",
 			requestURI:  "http://myworkspace.workspace.com?tkn=pass",
-			expectedURL: "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile&state=http%3A%2F%2Fmyworkspace.workspace.com%3Ftkn%3Dpass",
+			expectedURL: "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile api read_user&state=http%3A%2F%2Fmyworkspace.workspace.com%3Ftkn%3Dpass",
 		},
 	}
 
@@ -92,7 +94,7 @@ func TestRedirectToAuthUrl(t *testing.T) {
 }
 
 func TestIsRedirectUri(t *testing.T) {
-	config := &AuthConfig{
+	config := &Config{
 		RedirectURI: "http://workspaces.com/callback",
 	}
 
@@ -127,36 +129,43 @@ func TestMiddleware(t *testing.T) {
 	tt := []struct {
 		description        string
 		request            *http.Request
+		upstreams          []upstream.HostMapping
 		expectedStatusCode int
 	}{
 		{
 			description:        "When no cookie is present, should redirect to auth url",
 			request:            httptest.NewRequest(http.MethodGet, "http://workspace1.workspaces.com", nil),
+			upstreams:          []upstream.HostMapping{},
 			expectedStatusCode: http.StatusTemporaryRedirect,
 		},
 		{
 			description:        "When a valid cookie is present, should return the result",
 			request:            generateRequestWithCookie(generateToken(t, 10), "http://workspace1.workspaces.com"),
+			upstreams:          []upstream.HostMapping{},
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			description:        "When redirect uri is called without code throws an error",
 			request:            httptest.NewRequest(http.MethodGet, "http://workspaces.com/callback", nil),
+			upstreams:          []upstream.HostMapping{},
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
 			description:        "When redirect uri is called with code but without state throws an error",
 			request:            httptest.NewRequest(http.MethodGet, "http://workspaces.com/callback?code=123", nil),
+			upstreams:          []upstream.HostMapping{},
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
 			description:        "When redirect uri is called with code but without state throws an error",
 			request:            httptest.NewRequest(http.MethodGet, "http://workspaces.com/callback?code=123", nil),
+			upstreams:          []upstream.HostMapping{},
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
 			description:        "When redirect uri is called with code and state, redirects to state",
 			request:            httptest.NewRequest(http.MethodGet, "http://workspaces.com/callback?code=123&state=http://workspace1.workspaces.com", nil),
+			upstreams:          []upstream.HostMapping{{Host: "workspace1.workspaces.com"}},
 			expectedStatusCode: http.StatusTemporaryRedirect,
 		},
 	}
@@ -172,7 +181,7 @@ func TestMiddleware(t *testing.T) {
 		_, _ = w.Write(data)
 	}))
 
-	config := &AuthConfig{
+	config := &Config{
 		Host:         svr.URL,
 		ClientID:     "CLIENT_ID",
 		ClientSecret: "CLIENT_SECRET",
@@ -182,13 +191,18 @@ func TestMiddleware(t *testing.T) {
 
 	for _, tr := range tt {
 		t.Run(tr.description, func(t *testing.T) {
+			tracker := upstream.NewTracker(logger)
+
+			for _, us := range tr.upstreams {
+				tracker.Add(us)
+			}
 			recorder := httptest.NewRecorder()
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				_, _ = w.Write([]byte("Hello World"))
 			})
 
-			middleware := NewMiddleware(logger, config)(handler)
+			middleware := NewMiddleware(logger, config, tracker, gitlab.MockAPIFactory)(handler)
 			middleware.ServeHTTP(recorder, tr.request)
 
 			result := recorder.Result()

@@ -1,7 +1,7 @@
 OS = $(shell uname | tr A-Z a-z)
 
 CONTAINER_IMAGE_NAME = registry.gitlab.com/gitlab-org/remote-development/gitlab-workspaces-proxy
-CONTAINER_IMAGE_VERSION = 0.1
+CONTAINER_IMAGE_VERSION = 0.2
 CONTAINER_IMAGE_NAME_WITH_VERSION = $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_VERSION)
 
 # Dependency versions

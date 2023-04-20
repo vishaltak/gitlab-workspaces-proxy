@@ -7,7 +7,6 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
-	"sync"
 
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
 	"go.uber.org/zap"
@@ -15,50 +14,42 @@ import (
 )
 
 type Server struct {
-	opts         *ServerOptions
-	upstreams    map[string]upstream.HostMapping
-	upstreamLock sync.RWMutex
+	opts *Options
 }
 
-type ServerOptions struct {
+type Options struct {
 	Port       int
 	Middleware func(http.Handler) http.Handler
 	Logger     *zap.Logger
+	Tracker    *upstream.Tracker
 }
 
-func New(opts *ServerOptions) *Server {
+func New(opts *Options) *Server {
 	return &Server{
-		opts:      opts,
-		upstreams: make(map[string]upstream.HostMapping),
+		opts: opts,
 	}
-}
-
-func (s *Server) ShowUpstreams() map[string]upstream.HostMapping {
-	return s.upstreams
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.upstreamLock.RLock()
-	upstreams := s.upstreams
-	s.upstreamLock.RUnlock()
-
 	requestHost := strings.Split(r.Host, ":")[0]
-
-	if upstream, ok := upstreams[requestHost]; ok && upstream.Host == requestHost {
-		u, err := url.Parse(fmt.Sprintf("%s://%s:%d", upstream.BackendProtocol, upstream.Backend, upstream.BackendPort))
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			s.opts.Logger.Info("Error in parsing url", zap.String("url", u.String()), zap.Error(err))
-			return
-		}
-
-		proxy := httputil.NewSingleHostReverseProxy(u)
-		proxy.ServeHTTP(w, r)
+	workspaceHostMapping, err := s.opts.Tracker.Get(requestHost)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		// TODO: Add proper error pages when workspace not found
+		// https://gitlab.com/gitlab-org/gitlab/-/issues/407870
+		_, _ = w.Write([]byte("Workspace not found"))
 		return
 	}
 
-	w.WriteHeader(http.StatusNotFound)
-	_, _ = w.Write([]byte("Workspace not found"))
+	targetURL, err := url.Parse(fmt.Sprintf("%s://%s:%d", workspaceHostMapping.BackendProtocol, workspaceHostMapping.Backend, workspaceHostMapping.BackendPort))
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		s.opts.Logger.Info("Error in parsing url", zap.String("url", targetURL.String()), zap.Error(err))
+		return
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	proxy.ServeHTTP(w, r)
 }
 
 func (s *Server) Start(ctx context.Context) error {
@@ -94,18 +85,4 @@ func (s *Server) Start(ctx context.Context) error {
 	})
 
 	return eg.Wait()
-}
-
-func (s *Server) AddUpstream(mapping upstream.HostMapping) {
-	s.upstreamLock.Lock()
-	defer s.upstreamLock.Unlock()
-	s.upstreams[mapping.Host] = mapping
-	s.opts.Logger.Info("New upstream added", zap.String("host", mapping.Host), zap.String("backend", mapping.Backend), zap.Int32("backend_port", mapping.BackendPort))
-}
-
-func (s *Server) DeleteUpstream(host string) {
-	s.upstreamLock.Lock()
-	defer s.upstreamLock.Unlock()
-	delete(s.upstreams, host)
-	s.opts.Logger.Info("Upstream removed", zap.String("host", host))
 }

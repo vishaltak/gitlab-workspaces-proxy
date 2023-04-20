@@ -7,16 +7,16 @@ import (
 )
 
 type Claims struct {
-	Username string `json:"username"`
+	WorkspaceID string `json:"workspaceID"`
 	jwt.RegisteredClaims
 }
 
-func generateJwt(signingKey string, username string, expiresIn int) (string, error) {
+func generateJWT(signingKey string, workspaceID string, expiresIn int) (string, error) {
 	expirationTime := time.Now().Add(time.Duration(expiresIn) * time.Second)
 
-	// Create the JWT claims, which includes the username and expiry time
+	// Create the JWT claims, which includes the workspace id and expiry time
 	claims := &Claims{
-		Username: username,
+		WorkspaceID: workspaceID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			// In JWT, the expiry time is expressed as unix milliseconds
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
@@ -32,7 +32,7 @@ func generateJwt(signingKey string, username string, expiresIn int) (string, err
 	return tokenString, nil
 }
 
-func validateJwt(signingKey, token string) bool {
+func validateJWT(signingKey, token string) bool {
 	var claims Claims
 	tkn, err := jwt.ParseWithClaims(token, &claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(signingKey), nil

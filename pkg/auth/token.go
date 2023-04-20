@@ -9,7 +9,7 @@ import (
 	"net/url"
 )
 
-func getToken(ctx context.Context, config *AuthConfig, code string) (*token, error) {
+func getToken(ctx context.Context, config *Config, code string) (*token, error) {
 	u := fmt.Sprintf("%s/oauth/token", config.Host)
 	form := url.Values{
 		"redirect_uri":  []string{config.RedirectURI},

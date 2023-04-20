@@ -6,10 +6,12 @@ import (
 	"net/url"
 	"strings"
 
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/gitlab"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
 	"go.uber.org/zap"
 )
 
-type AuthConfig struct {
+type Config struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
 	RedirectURI  string `yaml:"redirect_uri"`
@@ -19,7 +21,7 @@ type AuthConfig struct {
 
 type HTTPMiddleware func(http.Handler) http.Handler
 
-func NewMiddleware(log *zap.Logger, config *AuthConfig) HTTPMiddleware {
+func NewMiddleware(log *zap.Logger, config *Config, upstreams *upstream.Tracker, apiFactory gitlab.APIFactory) HTTPMiddleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Check path if callback then get token and set cookie
@@ -37,20 +39,29 @@ func NewMiddleware(log *zap.Logger, config *AuthConfig) HTTPMiddleware {
 						return
 					}
 
-					workspaceName, err := getWorkspaceName(state)
+					hostname, err := getHostnameFromState(state)
 					if err != nil {
 						errorResponse(log, fmt.Errorf("could not parse workspace from host %s", err), w)
 						return
 					}
 
-					username, err := checkAuthorization(config, token.AccessToken, workspaceName)
+					log.Debug("Searching for upstream", zap.String("hostname", hostname))
+					workspace, err := upstreams.Get(hostname)
+					if err != nil {
+						errorResponse(log, fmt.Errorf("could not find upstream workspace %s", err), w)
+						return
+					}
+
+					log.Debug("Checking authorization", zap.String("workspace", workspace.WorkspaceID))
+					err = checkAuthorization(r.Context(), token.AccessToken, workspace.WorkspaceID, apiFactory)
 					if err != nil {
 						errorResponse(log, fmt.Errorf("could not authorize request %s", err), w)
 						return
 					}
+					log.Debug("Authorization verified", zap.String("workspace", workspace.Host))
 
 					// Create JWT for cookie
-					signedJwt, err := generateJwt(config.SigningKey, username, token.ExpiresIn)
+					signedJwt, err := generateJWT(config.SigningKey, workspace.WorkspaceID, token.ExpiresIn)
 					if err != nil {
 						errorResponse(log, fmt.Errorf("could not generate jwt %s", err), w)
 						return
@@ -81,7 +92,7 @@ func NewMiddleware(log *zap.Logger, config *AuthConfig) HTTPMiddleware {
 	}
 }
 
-func getWorkspaceName(state string) (string, error) {
+func getHostnameFromState(state string) (string, error) {
 	stateURL, err := url.QueryUnescape(state)
 	if err != nil {
 		return "", err
@@ -92,8 +103,8 @@ func getWorkspaceName(state string) (string, error) {
 		return "", err
 	}
 
-	// Get first part of hostname
-	hostElements := strings.Split(u.Hostname(), ".")
+	// Get first part of hostname (without port)
+	hostElements := strings.Split(u.Hostname(), ":")
 
 	return hostElements[0], nil
 }
@@ -103,22 +114,24 @@ func errorResponse(log *zap.Logger, err error, w http.ResponseWriter) {
 	log.Error("error processing request", zap.Error(err))
 }
 
-func redirectToAuthURL(config *AuthConfig, w http.ResponseWriter, r *http.Request) {
+func redirectToAuthURL(config *Config, w http.ResponseWriter, r *http.Request) {
 	// Calculate state based on current host
 	query := ""
+	port := ""
 	if r.URL.RawQuery != "" {
 		query = fmt.Sprintf("?%s", r.URL.RawQuery)
 	}
-	state := url.QueryEscape(fmt.Sprintf("http://%s%s%s", r.Host, r.URL.Path, query))
-	authURL := fmt.Sprintf("%s/oauth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile&state=%s", config.Host, config.ClientID, config.RedirectURI, state)
+
+	if r.URL.Port() != "" {
+		port = fmt.Sprintf(":%s", r.URL.Port())
+	}
+
+	state := url.QueryEscape(fmt.Sprintf("http://%s%s%s%s", r.Host, port, r.URL.Path, query))
+	authURL := fmt.Sprintf("%s/oauth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile api read_user&state=%s", config.Host, config.ClientID, config.RedirectURI, state)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
 
-func isRedirectURI(config *AuthConfig, r *http.Request) bool {
+func isRedirectURI(config *Config, r *http.Request) bool {
 	uri := fmt.Sprintf("http://%s%s", r.Host, r.URL.Path)
 	return uri == config.RedirectURI
-}
-
-func checkAuthorization(config *AuthConfig, accessToken string, workspace string) (string, error) {
-	return "patnaikshekhar", nil
 }

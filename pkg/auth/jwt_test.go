@@ -33,7 +33,7 @@ func TestValidateJwt(t *testing.T) {
 
 	for _, tr := range tt {
 		t.Run(tr.description, func(t *testing.T) {
-			result := validateJwt(signingKey, tr.token)
+			result := validateJWT(signingKey, tr.token)
 			require.Equal(t, tr.expected, result)
 		})
 	}
@@ -41,7 +41,7 @@ func TestValidateJwt(t *testing.T) {
 
 func generateToken(t *testing.T, expires int) string {
 	t.Helper()
-	tkn, err := generateJwt(signingKey, "test", expires)
+	tkn, err := generateJWT(signingKey, "1", expires)
 	require.Nil(t, err)
 
 	return tkn

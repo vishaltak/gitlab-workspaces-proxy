@@ -11,7 +11,7 @@ const (
 	SessionCookieName = "gitlab-workspace-session"
 )
 
-func checkIfValidCookieExists(r *http.Request, config *AuthConfig) bool {
+func checkIfValidCookieExists(r *http.Request, config *Config) bool {
 	cookie, err := r.Cookie(SessionCookieName)
 	if err != nil {
 		return false
@@ -21,7 +21,7 @@ func checkIfValidCookieExists(r *http.Request, config *AuthConfig) bool {
 		return false
 	}
 
-	return validateJwt(config.SigningKey, cookie.Value)
+	return validateJWT(config.SigningKey, cookie.Value)
 }
 
 func setCookie(w http.ResponseWriter, value string, domain string, expires int) {
