@@ -16,6 +16,12 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+func emptyAuthHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+	})
+}
+
 func TestStartServer(t *testing.T) {
 	upstreamSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("Hello World"))
@@ -86,18 +92,14 @@ func TestStartServer(t *testing.T) {
 			defer cancel()
 
 			logger := zaptest.NewLogger(t)
-			handler := func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					next.ServeHTTP(w, r)
-				})
-			}
 
 			tracker := upstream.NewTracker(logger)
 			s := New(&Options{
-				Port:       tr.port,
-				Middleware: handler,
-				Logger:     logger,
-				Tracker:    tracker,
+				Port:        tr.port,
+				Middleware:  emptyAuthHandler,
+				Logger:      logger,
+				Tracker:     tracker,
+				MetricsPath: "/metrics",
 			})
 
 			for _, u := range tr.upstreamsToAdd {
@@ -125,4 +127,31 @@ func TestStartServer(t *testing.T) {
 			require.Equal(t, tr.expectedBody, string(result))
 		})
 	}
+}
+
+func TestMetricsPath(t *testing.T) {
+	port := 8909
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	logger := zaptest.NewLogger(t)
+	tracker := upstream.NewTracker(logger)
+	s := New(&Options{
+		Port:        port,
+		Middleware:  emptyAuthHandler,
+		Logger:      logger,
+		Tracker:     tracker,
+		MetricsPath: "/metrics",
+	})
+
+	go func() {
+		err := s.Start(ctx)
+		require.Nil(t, err)
+	}()
+
+	res, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", port))
+	require.Nil(t, err)
+	defer res.Body.Close()
+
+	require.Equal(t, http.StatusOK, res.StatusCode)
 }

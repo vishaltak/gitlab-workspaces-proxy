@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -18,10 +19,11 @@ type Server struct {
 }
 
 type Options struct {
-	Port       int
-	Middleware func(http.Handler) http.Handler
-	Logger     *zap.Logger
-	Tracker    *upstream.Tracker
+	Port        int
+	Middleware  func(http.Handler) http.Handler
+	Logger      *zap.Logger
+	Tracker     *upstream.Tracker
+	MetricsPath string
 }
 
 func New(opts *Options) *Server {
@@ -69,16 +71,19 @@ func (s *Server) Start(ctx context.Context) error {
 
 	eg.Go(func() error {
 		s.opts.Logger.Info("Starting proxy server...")
-
-		var handler http.Handler
+		var mainHandler http.Handler
 
 		if s.opts.Middleware != nil {
-			handler = s.opts.Middleware(s)
+			mainHandler = s.opts.Middleware(s)
 		} else {
-			handler = s
+			mainHandler = s
 		}
 
-		if err := http.ListenAndServe(fmt.Sprintf(":%d", s.opts.Port), handler); err != nil {
+		mux := http.NewServeMux()
+		mux.Handle(s.opts.MetricsPath, promhttp.Handler())
+		mux.Handle("/", mainHandler)
+
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", s.opts.Port), mux); err != nil {
 			return err
 		}
 		return nil

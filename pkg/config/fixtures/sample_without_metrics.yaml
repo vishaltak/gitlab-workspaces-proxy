@@ -4,5 +4,4 @@ auth:
   host: http://gdk.localdev.me:3000
   redirect_uri: http://workspaces.com:9876/auth/callback
   signing_key: passwordpassword
-metrics_path: "/v1/metrics"
 port: 1234
