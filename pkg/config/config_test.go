@@ -12,6 +12,8 @@ func TestLoadConfig(t *testing.T) {
 		filename             string
 		expectedError        bool
 		expectedAuthClientID string
+		expectedMetricsPath  string
+		expectedPort         int
 	}{
 		{
 			description:          "When invalid filename is passed throws error",
@@ -24,6 +26,29 @@ func TestLoadConfig(t *testing.T) {
 			filename:             "./fixtures/sample.yaml",
 			expectedError:        false,
 			expectedAuthClientID: "CLIENT_ID",
+			expectedMetricsPath:  "/v1/metrics",
+			expectedPort:         1234,
+		},
+		{
+			description:          "When metrics path is not present in config",
+			filename:             "./fixtures/sample_without_metrics.yaml",
+			expectedError:        false,
+			expectedAuthClientID: "CLIENT_ID",
+			expectedMetricsPath:  "/metrics",
+			expectedPort:         1234,
+		},
+		{
+			description:          "When port is not present in config",
+			filename:             "./fixtures/sample_without_port.yaml",
+			expectedError:        false,
+			expectedAuthClientID: "CLIENT_ID",
+			expectedMetricsPath:  "/metrics",
+			expectedPort:         9876,
+		},
+		{
+			description:   "When port is not present in config",
+			filename:      "./fixtures/sample_mssing_client_id.yaml",
+			expectedError: true,
 		},
 	}
 
@@ -37,6 +62,8 @@ func TestLoadConfig(t *testing.T) {
 
 			require.Nil(t, err)
 			require.Equal(t, tr.expectedAuthClientID, config.Auth.ClientID)
+			require.Equal(t, tr.expectedMetricsPath, config.MetricsPath)
+			require.Equal(t, tr.expectedPort, config.Port)
 		})
 	}
 }

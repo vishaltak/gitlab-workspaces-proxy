@@ -65,10 +65,11 @@ func main() { //nolint:cyclop
 	upstreamTracker := upstream.NewTracker(logger)
 
 	opts := &server.Options{
-		Port:       *port,
-		Middleware: auth.NewMiddleware(logger, &cfg.Auth, upstreamTracker, apiFactory),
-		Logger:     logger,
-		Tracker:    upstreamTracker,
+		Port:        *port,
+		Middleware:  auth.NewMiddleware(logger, &cfg.Auth, upstreamTracker, apiFactory),
+		Logger:      logger,
+		Tracker:     upstreamTracker,
+		MetricsPath: cfg.MetricsPath,
 	}
 
 	s := server.New(opts)

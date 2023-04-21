@@ -21,64 +21,18 @@ type Config struct {
 
 type HTTPMiddleware func(http.Handler) http.Handler
 
-func NewMiddleware(log *zap.Logger, config *Config, upstreams *upstream.Tracker, apiFactory gitlab.APIFactory) HTTPMiddleware {
+func NewMiddleware(
+	log *zap.Logger,
+	config *Config,
+	upstreams *upstream.Tracker,
+	apiFactory gitlab.APIFactory,
+) HTTPMiddleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// TODO: refactor this block - https://gitlab.com/gitlab-org/gitlab/-/issues/408340
 			// Check path if callback then get token and set cookie
 			if isRedirectURI(config, r) {
-				if authCode, ok := r.URL.Query()["code"]; ok {
-					token, err := getToken(r.Context(), config, authCode[0])
-					if err != nil {
-						errorResponse(log, fmt.Errorf("error getting token %s", err), w)
-						return
-					}
-
-					state := r.URL.Query().Get("state")
-					if state == "" {
-						errorResponse(log, fmt.Errorf("state not present in request"), w)
-						return
-					}
-
-					hostname, err := getHostnameFromState(state)
-					if err != nil {
-						errorResponse(log, fmt.Errorf("could not parse workspace from host %s", err), w)
-						return
-					}
-
-					log.Debug("Searching for upstream", zap.String("hostname", hostname))
-					workspace, err := upstreams.Get(hostname)
-					if err != nil {
-						errorResponse(log, fmt.Errorf("could not find upstream workspace %s", err), w)
-						return
-					}
-
-					log.Debug("Checking authorization", zap.String("workspace", workspace.WorkspaceID))
-					err = checkAuthorization(r.Context(), token.AccessToken, workspace.WorkspaceID, apiFactory)
-					if err != nil {
-						errorResponse(log, fmt.Errorf("could not authorize request %s", err), w)
-						return
-					}
-					log.Debug("Authorization verified", zap.String("workspace", workspace.Host))
-
-					// Create JWT for cookie
-					signedJwt, err := generateJWT(config.SigningKey, workspace.WorkspaceID, token.ExpiresIn)
-					if err != nil {
-						errorResponse(log, fmt.Errorf("could not generate jwt %s", err), w)
-						return
-					}
-
-					// Redirect to url from state
-					stateURI, _ := url.QueryUnescape(state)
-
-					// Write Cookie
-					setCookie(w, signedJwt, r.Host, token.ExpiresIn)
-
-					http.Redirect(w, r, stateURI, http.StatusTemporaryRedirect)
-					return
-				} else {
-					errorResponse(log, fmt.Errorf("could not find auth code"), w)
-					return
-				}
+				handleRedirect(log, r, w, config, upstreams, apiFactory)
 			}
 
 			// Check if cookie is already present
@@ -89,6 +43,69 @@ func NewMiddleware(log *zap.Logger, config *Config, upstreams *upstream.Tracker,
 
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+func handleRedirect(
+	log *zap.Logger,
+	r *http.Request,
+	w http.ResponseWriter,
+	config *Config,
+	upstreams *upstream.Tracker,
+	apiFactory gitlab.APIFactory,
+) {
+	if authCode, ok := r.URL.Query()["code"]; ok {
+		token, err := getToken(r.Context(), config, authCode[0])
+		if err != nil {
+			errorResponse(log, fmt.Errorf("error getting token %s", err), w)
+			return
+		}
+
+		state := r.URL.Query().Get("state")
+		if state == "" {
+			errorResponse(log, fmt.Errorf("state not present in request"), w)
+			return
+		}
+
+		hostname, err := getHostnameFromState(state)
+		if err != nil {
+			errorResponse(log, fmt.Errorf("could not parse workspace from host %s", err), w)
+			return
+		}
+
+		log.Debug("Searching for upstream", zap.String("hostname", hostname))
+		workspace, err := upstreams.Get(hostname)
+		if err != nil {
+			errorResponse(log, fmt.Errorf("could not find upstream workspace %s", err), w)
+			return
+		}
+
+		log.Debug("Checking authorization", zap.String("workspace", workspace.WorkspaceID))
+		err = checkAuthorization(r.Context(), token.AccessToken, workspace.WorkspaceID, apiFactory)
+		if err != nil {
+			errorResponse(log, fmt.Errorf("could not authorize request %s", err), w)
+			return
+		}
+		log.Debug("Authorization verified", zap.String("workspace", workspace.Host))
+
+		// Create JWT for cookie
+		signedJwt, err := generateJWT(config.SigningKey, workspace.WorkspaceID, token.ExpiresIn)
+		if err != nil {
+			errorResponse(log, fmt.Errorf("could not generate jwt %s", err), w)
+			return
+		}
+
+		// Redirect to url from state
+		stateURI, _ := url.QueryUnescape(state)
+
+		// Write Cookie
+		setCookie(w, signedJwt, r.Host, token.ExpiresIn)
+
+		http.Redirect(w, r, stateURI, http.StatusTemporaryRedirect)
+		return
+	} else {
+		errorResponse(log, fmt.Errorf("could not find auth code"), w)
+		return
 	}
 }
 
