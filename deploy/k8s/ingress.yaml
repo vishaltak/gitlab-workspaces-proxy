@@ -25,3 +25,10 @@ spec:
             name: gitlab-workspaces-proxy
             port:
               number: 80
+  tls:
+  - hosts:
+    - "workspaces.localdev.me"
+    secretName: gitlab-workspaces-proxy-tls
+  - hosts:
+    - "*.workspaces.localdev.me"
+    secretName: gitlab-workspaces-wildcard-tls

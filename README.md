@@ -42,14 +42,14 @@ If you want to update the image version, change the configuration in the followi
     kubectl create ns gitlab-workspaces
     ```
 
-2. Register an app on your GitLab instance
+1. Register an app on your GitLab instance
 
     - Follow the instructions [here](https://docs.gitlab.com/ee/integration/oauth_provider.html) to register an OAuth application.
     - Set the redirect URI to `http://workspaces.localdev.me/auth/callback` .
     - Set the scopes to `openid`, `profile`, `email` .
     - Make a note of the client id and secret generated.
 
-3. Create configuration secret for the proxy
+1. Create configuration secret for the proxy
 
     ```sh
     export CLIENT_ID="your_application_id"
@@ -72,13 +72,70 @@ If you want to update the image version, change the configuration in the followi
       --from-literal=config.yaml=$SECRET_DATA
     ```
 
-4. Apply the manifests
+1. Generate TLS certificate
+
+    TLS certificates have to be generated for 2 domains
+    - The domain on which `gitlab-workspaces-proxy` will listen on. We'll call this `GITLAB_WORKSPACES_PROXY_DOMAIN`.
+    - The domain on which all workspaces will be available. We'll call this `GITLAB_WORKSPACES_WILDCARD_DOMAIN`
+
+    For real domains, you can generate certificates from any certificate authority. Here's an example using Let's Encrypt.
+    ```sh
+    brew install certbot
+
+    export EMAIL="YOUR_EMAIL@example.com"
+    export DOMAIN="example.remote.gitlab.dev"
+
+    certbot -d "${GITLAB_WORKSPACES_PROXY_DOMAIN}" \
+      -m "${EMAIL}" \
+      --config-dir ~/.certbot/config \
+      --logs-dir ~/.certbot/logs \
+      --work-dir ~/.certbot/work \
+      --manual \
+      --preferred-challenges dns certonly
+
+    certbot -d "${GITLAB_WORKSPACES_WILDCARD_DOMAIN}" \
+      -m "${EMAIL}" \
+      --config-dir ~/.certbot/config \
+      --logs-dir ~/.certbot/logs \
+      --work-dir ~/.certbot/work \
+      --manual \
+      --preferred-challenges dns certonly
+    
+    kubectl create secret tls gitlab-workspaces-proxy-tls -n gitlab-workspaces \
+      --cert="~/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/fullchain.pem" \
+      --key="~/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/privkey.pem"
+    
+    kubectl create secret tls gitlab-workspaces-wildcard-tls -n gitlab-workspaces \
+      --cert="~/.certbot/config/live/${GITLAB_WORKSPACES_WILDCARD_DOMAIN}/fullchain.pem" \
+      --key="~/.certbot/config/live/${GITLAB_WORKSPACES_WILDCARD_DOMAIN}/privkey.pem"
+    ```
+
+    For local development, you can use [mkcert](https://github.com/FiloSottile/mkcert)
+    ```sh
+    brew install certbot
+    brew install nss # if you use Firefox
+
+    export GITLAB_WORKSPACES_PROXY_DOMAIN="workspaces.localdev.me"
+    export GITLAB_WORKSPACES_WILDCARD_DOMAIN="*.workspaces.localdev.me"
+    mkcert -install  # create local certificate authority and add it in the system trust store
+    mkcert "${GITLAB_WORKSPACES_PROXY_DOMAIN}" "${GITLAB_WORKSPACES_WILDCARD_DOMAIN}"
+
+    kubectl create secret tls gitlab-workspaces-proxy-tls -n gitlab-workspaces \
+      --cert="./workspaces.localdev.me+1.pem" \
+      --key="./workspaces.localdev.me+1-key.pem"
+    
+    kubectl create secret tls gitlab-workspaces-wildcard-tls -n gitlab-workspaces \
+      --cert="./workspaces.localdev.me+1.pem" \
+      --key="./workspaces.localdev.me+1-key.pem"
+    ```
+
+1. Apply the manifests
 
     ```sh
     kubectl apply -k ./deploy/k8s -n gitlab-workspaces
     ```
 
-5. Create a DNS entry in core dns to enable the auth proxy to reach gdk from your cluster
+1. Create a DNS entry in core dns to enable the auth proxy to reach gdk from your cluster
 
     ```sh
     export GITLAB_HOST_WITHOUT_PORT=$(echo $GITLAB_URL | cut -d":" -f2 | cut -d "/" -f3)
