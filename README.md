@@ -92,11 +92,11 @@ If you want to update the image version, change the configuration in the followi
     For local development, you can use [mkcert](https://github.com/FiloSottile/mkcert)
     ```sh
     brew install mkcert
-    brew install nss # if you use Firefox
+    brew install nss
 
     export GITLAB_WORKSPACES_PROXY_DOMAIN="workspaces.localdev.me"
     export GITLAB_WORKSPACES_WILDCARD_DOMAIN="*.workspaces.localdev.me"
-    mkcert -install  # create local certificate authority and add it in the system trust store
+    mkcert -install
     mkcert "${GITLAB_WORKSPACES_PROXY_DOMAIN}" "${GITLAB_WORKSPACES_WILDCARD_DOMAIN}"
 
     kubectl create secret tls gitlab-workspaces-proxy-tls -n gitlab-workspaces \
