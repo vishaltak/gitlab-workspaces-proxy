@@ -1,0 +1,6 @@
+apiVersion: v2
+name: gitlab-workspaces-proxy
+description: GitLab workspaces helm chart
+type: application
+version: 0.1.1
+appVersion: "0.0.2"

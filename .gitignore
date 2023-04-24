@@ -4,3 +4,6 @@ sample_config.yaml
 proxy
 bin
 coverage.*
+env.sh
+*.pem
+*.tgz

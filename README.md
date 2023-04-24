@@ -14,6 +14,8 @@ auth:
   host: http://gdk.test:3000
   redirect_uri: http://127.0.0.1:9876/auth/callback
   signing_key: passwordpassword
+port: 9876
+metrics_path: "/metrics"
 EOT
 
 # run
@@ -32,7 +34,7 @@ make docker-publish
 
 If you want to update the image version, change the configuration in the following places
 - `Makefile` - `CONTAINER_IMAGE_VERSION` variable
-- `deploy/k8s/deploy.yaml` - `image` attribute for the `proxy` container
+- `helm/values.yaml` - `image.tag` variable
 
 ## Installation Instructions
 
@@ -46,33 +48,10 @@ If you want to update the image version, change the configuration in the followi
 
     - Follow the instructions [here](https://docs.gitlab.com/ee/integration/oauth_provider.html) to register an OAuth application.
     - Set the redirect URI to `http://workspaces.localdev.me/auth/callback` .
-    - Set the scopes to `openid`, `profile`, `email` .
+    - Set the scopes to `api`, `read_user`, `openid`, `profile` .
     - Make a note of the client id and secret generated.
 
-1. Create configuration secret for the proxy
-
-    ```sh
-    export CLIENT_ID="your_application_id"
-    export CLIENT_SECRET="your_application_secret"
-    export GITLAB_URL="http://gdk.test:3000"
-    export REDIRECT_URI=http://workspaces.localdev.me/auth/callback
-    export SIGNING_KEY="a_random_key_consisting_of_letters_numbers_and_special_chars"
-
-    SECRET_DATA=$(cat <<EOF
-    auth:
-      client_id: $CLIENT_ID
-      client_secret: $CLIENT_SECRET
-      host: $GITLAB_URL
-      redirect_uri: $REDIRECT_URI
-      signing_key: $SIGNING_KEY
-    EOF
-    )
-
-    kubectl create secret generic gitlab-workspaces-proxy -n gitlab-workspaces \
-      --from-literal=config.yaml=$SECRET_DATA
-    ```
-
-1. Generate TLS certificate
+1. Generate TLS certificates
 
     TLS certificates have to be generated for 2 domains
     - The domain on which `gitlab-workspaces-proxy` will listen on. We'll call this `GITLAB_WORKSPACES_PROXY_DOMAIN`.
@@ -129,10 +108,30 @@ If you want to update the image version, change the configuration in the followi
       --key="./workspaces.localdev.me+1-key.pem"
     ```
 
-1. Apply the manifests
+1. Create configuration secret for the proxy and deploy the helm chart
 
     ```sh
-    kubectl apply -k ./deploy/k8s -n gitlab-workspaces
+    export CLIENT_ID="your_application_id"
+    export CLIENT_SECRET="your_application_secret"
+    export GITLAB_URL="http://gdk.test:3000"
+    export REDIRECT_URI=http://workspaces.localdev.me/auth/callback
+    export SIGNING_KEY="a_random_key_consisting_of_letters_numbers_and_special_chars"
+
+    helm repo add gitlab-workspaces-proxy \
+      https://gitlab.com/api/v4/projects/gitlab-org%2fremote-development%2fgitlab-workspaces-proxy/packages/helm/devel
+
+    helm repo update
+
+    helm upgrade --install gitlab-workspaces-proxy \
+      gitlab-workspaces-proxy/gitlab-workspaces-proxy \
+      --version 0.1.1 \
+      --namespace=gitlab-workspaces \
+      --set="auth.client_id=$CLIENT_ID" \
+      --set="auth.client_secret=$CLIENT_SECRET" \
+      --set="auth.host=$GITLAB_URL" \
+      --set="auth.redirect_uri=$REDIRECT_URI" \
+      --set="auth.signing_key=$SIGNING_KEY" \
+      --set="ingress.className=nginx"
     ```
 
 1. Create a DNS entry in core dns to enable the auth proxy to reach gdk from your cluster
