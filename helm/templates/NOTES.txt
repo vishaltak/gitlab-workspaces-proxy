@@ -1,0 +1,1 @@
+GitLab Workspaces Proxy is now installed in the cluster.
