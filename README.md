@@ -108,7 +108,7 @@ If you want to update the image version, change the configuration in the followi
       --key="./workspaces.localdev.me+1-key.pem"
     ```
 
-1. Create configuration secret for the proxy and deploy the helm chart
+1. Create configuration secret for the proxy and deploy the helm chart. (**Ensure that you're using helm version v3.11.0 and above**)
 
     ```sh
     export CLIENT_ID="your_application_id"
