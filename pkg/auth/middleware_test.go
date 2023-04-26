@@ -55,9 +55,9 @@ func TestErrorResponse(t *testing.T) {
 
 func TestRedirectToAuthUrl(t *testing.T) {
 	config := &Config{
-		Host:        "http://my.gitlab.com",
+		Host:        "https://my.gitlab.com",
 		ClientID:    "CLIENT_ID",
-		RedirectURI: "http://workspaces.com/callback",
+		RedirectURI: "https://workspaces.com/callback",
 	}
 
 	tests := []struct {
@@ -67,13 +67,13 @@ func TestRedirectToAuthUrl(t *testing.T) {
 	}{
 		{
 			description: "With hostname only",
-			requestURI:  "http://myworkspace.workspace.com",
-			expectedURL: "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile api read_user&state=http%3A%2F%2Fmyworkspace.workspace.com",
+			requestURI:  "https://myworkspace.workspace.com",
+			expectedURL: "https://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=https://workspaces.com/callback&scope=openid profile api read_user&state=https%3A%2F%2Fmyworkspace.workspace.com",
 		},
 		{
 			description: "With query string",
-			requestURI:  "http://myworkspace.workspace.com?tkn=pass",
-			expectedURL: "http://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http://workspaces.com/callback&scope=openid profile api read_user&state=http%3A%2F%2Fmyworkspace.workspace.com%3Ftkn%3Dpass",
+			requestURI:  "https://myworkspace.workspace.com?tkn=pass",
+			expectedURL: "https://my.gitlab.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=https://workspaces.com/callback&scope=openid profile api read_user&state=https%3A%2F%2Fmyworkspace.workspace.com%3Ftkn%3Dpass",
 		},
 	}
 
@@ -96,6 +96,7 @@ func TestRedirectToAuthUrl(t *testing.T) {
 func TestIsRedirectUri(t *testing.T) {
 	config := &Config{
 		RedirectURI: "http://workspaces.com/callback",
+		Protocol:    "http",
 	}
 
 	tt := []struct {
@@ -187,6 +188,7 @@ func TestMiddleware(t *testing.T) {
 		ClientSecret: "CLIENT_SECRET",
 		RedirectURI:  "http://workspaces.com/callback",
 		SigningKey:   "abc",
+		Protocol:     "http",
 	}
 
 	for _, tr := range tt {

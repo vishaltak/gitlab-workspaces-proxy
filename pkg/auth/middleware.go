@@ -17,6 +17,7 @@ type Config struct {
 	RedirectURI  string `yaml:"redirect_uri"`
 	Host         string `yaml:"host"`
 	SigningKey   string `yaml:"signing_key"`
+	Protocol     string `yaml:"protocol"`
 }
 
 type HTTPMiddleware func(http.Handler) http.Handler
@@ -33,6 +34,7 @@ func NewMiddleware(
 			// Check path if callback then get token and set cookie
 			if isRedirectURI(config, r) {
 				handleRedirect(log, r, w, config, upstreams, apiFactory)
+				return
 			}
 
 			// Check if cookie is already present
@@ -143,12 +145,22 @@ func redirectToAuthURL(config *Config, w http.ResponseWriter, r *http.Request) {
 		port = fmt.Sprintf(":%s", r.URL.Port())
 	}
 
-	state := url.QueryEscape(fmt.Sprintf("http://%s%s%s%s", r.Host, port, r.URL.Path, query))
+	protocol := "https"
+	if config.Protocol != "" {
+		protocol = config.Protocol
+	}
+
+	state := url.QueryEscape(fmt.Sprintf("%s://%s%s%s%s", protocol, r.Host, port, r.URL.Path, query))
 	authURL := fmt.Sprintf("%s/oauth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile api read_user&state=%s", config.Host, config.ClientID, config.RedirectURI, state)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
 
 func isRedirectURI(config *Config, r *http.Request) bool {
-	uri := fmt.Sprintf("http://%s%s", r.Host, r.URL.Path)
+	protocol := "https"
+	if config.Protocol != "" {
+		protocol = config.Protocol
+	}
+
+	uri := fmt.Sprintf("%s://%s%s", protocol, r.Host, r.URL.Path)
 	return uri == config.RedirectURI
 }

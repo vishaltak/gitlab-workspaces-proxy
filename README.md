@@ -14,6 +14,7 @@ auth:
   host: http://gdk.test:3000
   redirect_uri: http://127.0.0.1:9876/auth/callback
   signing_key: passwordpassword
+  protocol: http
 port: 9876
 metrics_path: "/metrics"
 EOT
@@ -47,7 +48,7 @@ If you want to update the image version, change the configuration in the followi
 1. Register an app on your GitLab instance
 
     - Follow the instructions [here](https://docs.gitlab.com/ee/integration/oauth_provider.html) to register an OAuth application.
-    - Set the redirect URI to `http://workspaces.localdev.me/auth/callback` .
+    - Set the redirect URI to `https://workspaces.localdev.me/auth/callback` .
     - Set the scopes to `api`, `read_user`, `openid`, `profile` .
     - Make a note of the client id and secret generated.
 
@@ -114,7 +115,7 @@ If you want to update the image version, change the configuration in the followi
     export CLIENT_ID="your_application_id"
     export CLIENT_SECRET="your_application_secret"
     export GITLAB_URL="http://gdk.test:3000"
-    export REDIRECT_URI=http://workspaces.localdev.me/auth/callback
+    export REDIRECT_URI=https://workspaces.localdev.me/auth/callback
     export SIGNING_KEY="a_random_key_consisting_of_letters_numbers_and_special_chars"
 
     helm repo add gitlab-workspaces-proxy \
@@ -124,7 +125,7 @@ If you want to update the image version, change the configuration in the followi
 
     helm upgrade --install gitlab-workspaces-proxy \
       gitlab-workspaces-proxy/gitlab-workspaces-proxy \
-      --version 0.1.1 \
+      --version 0.1.2 \
       --namespace=gitlab-workspaces \
       --set="auth.client_id=$CLIENT_ID" \
       --set="auth.client_secret=$CLIENT_SECRET" \
