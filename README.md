@@ -130,7 +130,7 @@ If you want to update the image version, change the configuration in the followi
     helm repo update
 
     helm upgrade --install gitlab-workspaces-proxy \
-      ./helm \
+      gitlab-workspaces-proxy/gitlab-workspaces-proxy \
       --version 0.1.3 \
       --namespace=gitlab-workspaces \
       --set="auth.client_id=$CLIENT_ID" \
