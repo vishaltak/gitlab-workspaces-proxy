@@ -23,14 +23,20 @@ EOT
 make
 ```
 
-## Building and Publishing Container Image
+## Building and Publishing Assets
 
 ```shell
-# to build the image
+# build the image
 make docker-build
 
-# to publish the image
+# publish the image
 make docker-publish
+
+# package helm chart
+make helm-package
+
+# publish helm chart
+make helm-publish
 ```
 
 If you want to update the image version, change the configuration in the following places
@@ -124,8 +130,8 @@ If you want to update the image version, change the configuration in the followi
     helm repo update
 
     helm upgrade --install gitlab-workspaces-proxy \
-      gitlab-workspaces-proxy/gitlab-workspaces-proxy \
-      --version 0.1.2 \
+      ./helm \
+      --version 0.1.3 \
       --namespace=gitlab-workspaces \
       --set="auth.client_id=$CLIENT_ID" \
       --set="auth.client_secret=$CLIENT_SECRET" \
