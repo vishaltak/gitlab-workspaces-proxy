@@ -46,11 +46,19 @@ func main() { //nolint:cyclop
 		os.Exit(-1)
 	}
 
-	logger, err := zap.NewProduction()
+	logConfig := zap.NewProductionConfig()
+	logConfig.Level, err = cfg.GetZapLevel()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading log level %s", err)
+		os.Exit(-1)
+	}
+
+	logger, err := logConfig.Build()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating logger %s", err)
 		os.Exit(-1)
 	}
+
 	defer func() {
 		err = logger.Sync()
 		if err != nil {
