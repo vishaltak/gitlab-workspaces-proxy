@@ -22,6 +22,12 @@ func emptyAuthHandler(next http.Handler) http.Handler {
 	})
 }
 
+func emptyLoggingHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+	})
+}
+
 func TestStartServer(t *testing.T) {
 	upstreamSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("Hello World"))
@@ -95,11 +101,12 @@ func TestStartServer(t *testing.T) {
 
 			tracker := upstream.NewTracker(logger)
 			s := New(&Options{
-				Port:        tr.port,
-				Middleware:  emptyAuthHandler,
-				Logger:      logger,
-				Tracker:     tracker,
-				MetricsPath: "/metrics",
+				Port:              tr.port,
+				AuthMiddleware:    emptyAuthHandler,
+				LoggingMiddleware: emptyLoggingHandler,
+				Logger:            logger,
+				Tracker:           tracker,
+				MetricsPath:       "/metrics",
 			})
 
 			for _, u := range tr.upstreamsToAdd {
@@ -137,17 +144,21 @@ func TestMetricsPath(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	tracker := upstream.NewTracker(logger)
 	s := New(&Options{
-		Port:        port,
-		Middleware:  emptyAuthHandler,
-		Logger:      logger,
-		Tracker:     tracker,
-		MetricsPath: "/metrics",
+		Port:              port,
+		AuthMiddleware:    emptyAuthHandler,
+		LoggingMiddleware: emptyLoggingHandler,
+		Logger:            logger,
+		Tracker:           tracker,
+		MetricsPath:       "/metrics",
 	})
 
 	go func() {
 		err := s.Start(ctx)
 		require.Nil(t, err)
 	}()
+	// Added sleep (to fix flaky test) in order to allow the server to start before we make
+	// the request
+	time.Sleep(2 * time.Second)
 
 	res, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", port))
 	require.Nil(t, err)

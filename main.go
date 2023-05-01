@@ -13,6 +13,7 @@ import (
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/config"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/gitlab"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/k8s"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/logging"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/server"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
 	"go.uber.org/zap"
@@ -63,13 +64,16 @@ func main() { //nolint:cyclop
 	}
 
 	upstreamTracker := upstream.NewTracker(logger)
+	loggingMiddleware := logging.NewMiddleware(logger)
+	authMiddleware := auth.NewMiddleware(logger, &cfg.Auth, upstreamTracker, apiFactory)
 
 	opts := &server.Options{
-		Port:        *port,
-		Middleware:  auth.NewMiddleware(logger, &cfg.Auth, upstreamTracker, apiFactory),
-		Logger:      logger,
-		Tracker:     upstreamTracker,
-		MetricsPath: cfg.MetricsPath,
+		Port:              *port,
+		LoggingMiddleware: loggingMiddleware,
+		AuthMiddleware:    authMiddleware,
+		Logger:            logger,
+		Tracker:           upstreamTracker,
+		MetricsPath:       cfg.MetricsPath,
 	}
 
 	s := server.New(opts)
