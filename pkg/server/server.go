@@ -19,11 +19,12 @@ type Server struct {
 }
 
 type Options struct {
-	Port        int
-	Middleware  func(http.Handler) http.Handler
-	Logger      *zap.Logger
-	Tracker     *upstream.Tracker
-	MetricsPath string
+	Port              int
+	LoggingMiddleware func(http.Handler) http.Handler
+	AuthMiddleware    func(http.Handler) http.Handler
+	Logger            *zap.Logger
+	Tracker           *upstream.Tracker
+	MetricsPath       string
 }
 
 func New(opts *Options) *Server {
@@ -71,13 +72,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	eg.Go(func() error {
 		s.opts.Logger.Info("Starting proxy server...")
-		var mainHandler http.Handler
-
-		if s.opts.Middleware != nil {
-			mainHandler = s.opts.Middleware(s)
-		} else {
-			mainHandler = s
-		}
+		mainHandler := s.opts.LoggingMiddleware(s.opts.AuthMiddleware(s))
 
 		mux := http.NewServeMux()
 		mux.Handle(s.opts.MetricsPath, promhttp.Handler())

@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: registry.gitlab.com/gitlab-org/remote-development/gitlab-workspaces-proxy
   pullPolicy: Always
-  tag: "0.4"
+  tag: "0.5"
 
 imagePullSecrets: []
 nameOverride: ""
