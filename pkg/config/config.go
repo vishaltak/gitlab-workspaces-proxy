@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/auth"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -14,6 +15,7 @@ type Config struct {
 	Auth        auth.Config `yaml:"auth"`
 	MetricsPath string      `yaml:"metrics_path"`
 	Port        int         `yaml:"port"`
+	LogLevel    string      `yaml:"log_level"`
 }
 
 func LoadConfig(filename string) (*Config, error) {
@@ -50,5 +52,18 @@ func (c *Config) setDefaults() error {
 		c.Port = 9876
 	}
 
+	if c.LogLevel == "" {
+		c.LogLevel = "info"
+	}
+
 	return nil
+}
+
+func (c *Config) GetZapLevel() (zap.AtomicLevel, error) {
+	var zapLevel zap.AtomicLevel
+	err := zapLevel.UnmarshalText([]byte(c.LogLevel))
+	if err != nil {
+		return zap.NewAtomicLevel(), err
+	}
+	return zapLevel, nil
 }
