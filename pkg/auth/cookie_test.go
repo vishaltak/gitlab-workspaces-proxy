@@ -30,19 +30,19 @@ func TestCheckIfValidCookieExists(t *testing.T) {
 		},
 		{
 			description: "When a valid token exists returns true",
-			request:     generateRequestWithCookie(generateToken(t, 1), "http://my.workspace.com"),
+			request:     generateRequestWithCookie(generateToken(t, 1, "1"), "http://my.workspace.com"),
 			expected:    true,
 		},
 		{
 			description: "When the token is expired returns false",
-			request:     generateRequestWithCookie(generateToken(t, -1), "http://my.workspace.com"),
+			request:     generateRequestWithCookie(generateToken(t, -1, "1"), "http://my.workspace.com"),
 			expected:    false,
 		},
 	}
 
 	for _, tr := range tt {
 		t.Run(tr.description, func(t *testing.T) {
-			result := checkIfValidCookieExists(tr.request, config)
+			result := checkIfValidCookieExists(tr.request, config, "1")
 			require.Equal(t, tr.expected, result)
 		})
 	}

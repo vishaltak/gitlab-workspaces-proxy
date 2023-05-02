@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -37,8 +38,20 @@ func NewMiddleware(
 				return
 			}
 
-			// Check if cookie is already present
-			if !checkIfValidCookieExists(r, config) {
+			protocol := "https"
+			if config.Protocol != "" {
+				protocol = config.Protocol
+			}
+			url := fmt.Sprintf("%s://%s%s%s%s", protocol, r.Host, r.URL.Port(), r.URL.Path, r.URL.RawQuery)
+			log.Debug("finding upstream with url", zap.String("url", url))
+			workspace, err := getWorkspaceFromURL(url, upstreams)
+			if err != nil {
+				errorResponse(log, err, w)
+				return
+			}
+
+			// Check if cookie is already present for workspace ID
+			if !checkIfValidCookieExists(r, config, workspace.WorkspaceID) {
 				redirectToAuthURL(config, w, r)
 				return
 			}
@@ -69,17 +82,9 @@ func handleRedirect(
 			return
 		}
 
-		hostname, err := getHostnameFromState(state)
+		workspace, err := getWorkspaceFromURL(state, upstreams)
 		if err != nil {
-			errorResponse(log, fmt.Errorf("could not parse workspace from host %s", err), w)
-			return
-		}
-
-		log.Debug("Searching for upstream", zap.String("hostname", hostname))
-		workspace, err := upstreams.Get(hostname)
-		if err != nil {
-			errorResponse(log, fmt.Errorf("could not find upstream workspace %s", err), w)
-			return
+			errorResponse(log, err, w)
 		}
 
 		log.Debug("Checking authorization", zap.String("workspace", workspace.WorkspaceID))
@@ -116,11 +121,13 @@ func getHostnameFromState(state string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	log.Printf("getHostnameFromState state=%s", stateURL)
 
 	u, err := url.Parse(stateURL)
 	if err != nil {
 		return "", err
 	}
+	log.Printf("getHostnameFromState u.Hostname()=%s", u.Hostname())
 
 	// Get first part of hostname (without port)
 	hostElements := strings.Split(u.Hostname(), ":")
@@ -163,4 +170,18 @@ func isRedirectURI(config *Config, r *http.Request) bool {
 
 	uri := fmt.Sprintf("%s://%s%s", protocol, r.Host, r.URL.Path)
 	return uri == config.RedirectURI
+}
+
+func getWorkspaceFromURL(url string, upstreams *upstream.Tracker) (*upstream.HostMapping, error) {
+	hostname, err := getHostnameFromState(url)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse workspace from host %s", err)
+	}
+
+	upstream, err := upstreams.Get(hostname)
+	if err != nil {
+		return nil, fmt.Errorf("could not find upstream workspace %s", err)
+	}
+
+	return upstream, nil
 }
