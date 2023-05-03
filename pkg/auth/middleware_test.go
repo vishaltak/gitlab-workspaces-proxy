@@ -132,17 +132,18 @@ func TestMiddleware(t *testing.T) {
 		request            *http.Request
 		upstreams          []upstream.HostMapping
 		expectedStatusCode int
+		host               string
 	}{
 		{
-			description:        "When no cookie is present, should redirect to auth url",
+			description:        "When no cookie is present should redirect to auth url",
 			request:            httptest.NewRequest(http.MethodGet, "http://workspace1.workspaces.com", nil),
-			upstreams:          []upstream.HostMapping{},
+			upstreams:          []upstream.HostMapping{{Host: "workspace1.workspaces.com", WorkspaceID: "1"}},
 			expectedStatusCode: http.StatusTemporaryRedirect,
 		},
 		{
-			description:        "When a valid cookie is present, should return the result",
-			request:            generateRequestWithCookie(generateToken(t, 10), "http://workspace1.workspaces.com"),
-			upstreams:          []upstream.HostMapping{},
+			description:        "When a valid cookie is present should return the result",
+			request:            generateRequestWithCookie(generateToken(t, 10, "1"), "http://workspace1.workspaces.com"),
+			upstreams:          []upstream.HostMapping{{Host: "workspace1.workspaces.com", WorkspaceID: "1"}},
 			expectedStatusCode: http.StatusOK,
 		},
 		{
