@@ -15,7 +15,7 @@ import (
 
 const (
 	informerResyncPeriod  = 1 * time.Hour
-	WorkspaceServiceLabel = "gl/agent-id"
+	WorkspaceServiceLabel = "agent.gitlab.com/id"
 )
 
 type InformerAction uint16

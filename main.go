@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	workspaceHostTemplateAnnotation = "gl/workspace-domain-template"
-	workspaceIDAnnotation           = "gl/workspace-id"
+	workspaceHostTemplateAnnotation = "workspaces.gitlab.com/host-template"
+	workspaceIDAnnotation           = "workspaces.gitlab.com/id"
 )
 
 func main() { //nolint:cyclop
