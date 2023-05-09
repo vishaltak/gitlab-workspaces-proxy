@@ -86,14 +86,6 @@ If you want to update the image version, change the configuration in the followi
       --work-dir ~/.certbot/work \
       --manual \
       --preferred-challenges dns certonly
-    
-    kubectl create secret tls gitlab-workspaces-proxy-tls -n gitlab-workspaces \
-      --cert="~/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/fullchain.pem" \
-      --key="~/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/privkey.pem"
-    
-    kubectl create secret tls gitlab-workspaces-wildcard-tls -n gitlab-workspaces \
-      --cert="~/.certbot/config/live/${GITLAB_WORKSPACES_WILDCARD_DOMAIN}/fullchain.pem" \
-      --key="~/.certbot/config/live/${GITLAB_WORKSPACES_WILDCARD_DOMAIN}/privkey.pem"
     ```
 
     For local development, you can use [mkcert](https://github.com/FiloSottile/mkcert)
@@ -105,14 +97,6 @@ If you want to update the image version, change the configuration in the followi
     export GITLAB_WORKSPACES_WILDCARD_DOMAIN="*.workspaces.localdev.me"
     mkcert -install
     mkcert "${GITLAB_WORKSPACES_PROXY_DOMAIN}" "${GITLAB_WORKSPACES_WILDCARD_DOMAIN}"
-
-    kubectl create secret tls gitlab-workspaces-proxy-tls -n gitlab-workspaces \
-      --cert="./workspaces.localdev.me+1.pem" \
-      --key="./workspaces.localdev.me+1-key.pem"
-    
-    kubectl create secret tls gitlab-workspaces-wildcard-tls -n gitlab-workspaces \
-      --cert="./workspaces.localdev.me+1.pem" \
-      --key="./workspaces.localdev.me+1-key.pem"
     ```
 
 1. Create configuration secret for the proxy and deploy the helm chart. (**Ensure that you're using helm version v3.11.0 and above**)
@@ -123,6 +107,10 @@ If you want to update the image version, change the configuration in the followi
     export GITLAB_URL="http://gdk.test:3000"
     export REDIRECT_URI=https://workspaces.localdev.me/auth/callback
     export SIGNING_KEY="a_random_key_consisting_of_letters_numbers_and_special_chars"
+    export WORKSPACES_DOMAIN_CERT="location of the workspaces domain cert generated in previous step"
+    export WORKSPACES_DOMAIN_KEY="location of the workspaces domain key generated in previous step"
+    export WILDCARD_DOMAIN_CERT="location of the wildcard domain cert generated in previous step"
+    export WILDCARD_DOMAIN_KEY="location of the wildcard domain key generated in previous step"
 
     helm repo add gitlab-workspaces-proxy \
       https://gitlab.com/api/v4/projects/gitlab-org%2fremote-development%2fgitlab-workspaces-proxy/packages/helm/devel
@@ -131,15 +119,21 @@ If you want to update the image version, change the configuration in the followi
 
     helm upgrade --install gitlab-workspaces-proxy \
       gitlab-workspaces-proxy/gitlab-workspaces-proxy \
-      --version 0.1.4 \
+      --version 0.1.5 \
       --namespace=gitlab-workspaces \
       --set="auth.client_id=$CLIENT_ID" \
       --set="auth.client_secret=$CLIENT_SECRET" \
       --set="auth.host=$GITLAB_URL" \
       --set="auth.redirect_uri=$REDIRECT_URI" \
       --set="auth.signing_key=$SIGNING_KEY" \
+      --set="ingress.tls.workspaceDomainCert=$(cat $WORKSPACES_DOMAIN_CERT)" \
+      --set="ingress.tls.workspaceDomainKey=$(cat $WORKSPACES_DOMAIN_KEY)" \
+      --set="ingress.tls.wildcardDomainCert=$(cat $WILDCARD_DOMAIN_CERT)" \
+      --set="ingress.tls.wildcardDomainKey=$(cat $WILDCARD_DOMAIN_KEY)" \
       --set="ingress.className=nginx"
     ```
+
+    Note: For local development, the location of the wildcard and workspaces cert will be `./workspaces.localdev.me+1.pem` and the location of the wildard and workspaces key will be `./workspaces.localdev.me+1-key.pem`
 
 1. Create a DNS entry in core dns to enable the auth proxy to reach gdk from your cluster
 

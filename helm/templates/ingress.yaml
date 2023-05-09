@@ -17,10 +17,10 @@ spec:
   tls:
     - hosts:
       - {{ .Values.ingress.host }}
-      secretName: {{ .Values.ingress.tls.gitlabWorkspacesProxyTlsSecretName }}
+      secretName: {{ include "gitlab-workspaces-proxy.fullname" . }}-workspaces-cert
     - hosts:
       - "*.{{ .Values.ingress.host }}"
-      secretName: {{ .Values.ingress.tls.gitlabWorkspacesWildcardTlsSecretName }}
+      secretName:  {{ include "gitlab-workspaces-proxy.fullname" . }}-workspaces-wildcard-cert
   {{- end }}
   rules:
   - host: {{ .Values.ingress.host }}
