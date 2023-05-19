@@ -16,14 +16,14 @@ spec:
   {{- if .Values.ingress.tls }}
   tls:
     - hosts:
-      - {{ .Values.ingress.host }}
+      - {{ .Values.ingress.host.workspaceDomain | quote }}
       secretName: {{ include "gitlab-workspaces-proxy.fullname" . }}-workspaces-cert
     - hosts:
-      - "*.{{ .Values.ingress.host }}"
+      - {{ .Values.ingress.host.wildcardDomain | quote }}
       secretName:  {{ include "gitlab-workspaces-proxy.fullname" . }}-workspaces-wildcard-cert
   {{- end }}
   rules:
-  - host: {{ .Values.ingress.host }}
+  - host: {{ .Values.ingress.host.workspaceDomain | quote }}
     http:
       paths:
       - path: /
@@ -33,7 +33,7 @@ spec:
             name:  {{ include "gitlab-workspaces-proxy.fullname" . }}
             port:
               number: {{ $svcPort }}
-  - host: "*.{{ .Values.ingress.host }}"
+  - host: {{ .Values.ingress.host.wildcardDomain | quote }}
     http:
       paths:
       - path: /
