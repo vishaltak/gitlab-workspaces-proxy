@@ -1,5 +1,5 @@
 variables:
-  GO_VERSION: "1.18"
+  GO_VERSION: "1.19"
 
 include:
   - template: 'Workflows/MergeRequest-Pipelines.gitlab-ci.yml'
@@ -48,7 +48,7 @@ run_tests:
   extends: .go-cache
   parallel:
     matrix:
-      - GO_VERSION: ["1.18", "1.19", "1.20"]
+      - GO_VERSION: ["1.19", "1.20"]
   script:
     - make test
   after_script:
