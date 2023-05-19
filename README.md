@@ -1,21 +1,28 @@
 # gitlab-workspaces-proxy
 
-This proxy is responsible for authentication and authorization of the workspaces running in the cluster.
+This proxy is responsible for authentication and authorization of the [workspaces](https://docs.gitlab.com/ee/user/workspace/) running in the cluster.
 The proxy uses a central proxy design and automatically discovers backends based on annotations on the service.
 
 
 ## Installation Instructions
 
+Ensure that your Kubernetes cluster is running, and an Ingress controller is installed. `kubectl` and `helm` are required on your local machine for the installation steps. 
+
 1. Generate TLS certificates
 
     TLS certificates have to be generated for 2 domains
     - The domain on which `gitlab-workspaces-proxy` will listen on. We'll call this `GITLAB_WORKSPACES_PROXY_DOMAIN`.
-    - The domain on which all workspaces will be available. We'll call this `GITLAB_WORKSPACES_WILDCARD_DOMAIN`
+    - The domain on which all workspaces will be available. We'll call this `GITLAB_WORKSPACES_WILDCARD_DOMAIN`.
 
-    You can generate certificates from any certificate authority. Here's an example using Let's Encrypt.
+    You can generate certificates from any certificate authority.
+    
+    Here's an example using Let's Encrypt using [certbot](https://certbot.eff.org/). The CLI wizard will ask you for the ACME DNS challenge, and requires you to create TXT records at your DNS provider. 
+
     ```sh
     brew install certbot
+    ```
 
+    ```
     export EMAIL="YOUR_EMAIL@example.dev"
     export GITLAB_WORKSPACES_PROXY_DOMAIN="workspaces.example.dev"
     export GITLAB_WORKSPACES_WILDCARD_DOMAIN="*.workspaces.example.dev"
@@ -35,19 +42,32 @@ The proxy uses a central proxy design and automatically discovers backends based
       --work-dir ~/.certbot/work \
       --manual \
       --preferred-challenges dns certonly
+    ```
 
+    Note the certificate directories from the output, and update the environment variables below. 
+
+    ```
     export WORKSPACES_DOMAIN_CERT="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/fullchain.pem"
     export WORKSPACES_DOMAIN_KEY="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/privkey.pem"
     export WILDCARD_DOMAIN_CERT="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_WILDCARD_DOMAIN}/fullchain.pem"
     export WILDCARD_DOMAIN_KEY="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_WILDCARD_DOMAIN}/privkey.pem"
     ```
 
+    Optional: The `certbot` command sometimes creates a different path for the wildcard domain, using the proxy domain and a `-0001` prefix. 
+
+    ```
+    export WORKSPACES_DOMAIN_CERT="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/fullchain.pem"
+    export WORKSPACES_DOMAIN_KEY="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/privkey.pem"
+    export WILDCARD_DOMAIN_CERT="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}-0001/fullchain.pem"
+    export WILDCARD_DOMAIN_KEY="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}-0001/privkey.pem"
+    ```    
+
 1. Register an app on your GitLab instance
 
     - Follow the instructions [here](https://docs.gitlab.com/ee/integration/oauth_provider.html) to register an OAuth application.
     - Set the redirect URI to `https://${GITLAB_WORKSPACES_PROXY_DOMAIN}/auth/callback` .
     - Set the scopes to `api`, `read_user`, `openid`, `profile` .
-    - Make a note of the client id and secret generated.
+    - Make a note of the client id and secret generated (document them in a secrets vault, e.g. 1Password).
 
     ```sh
     export CLIENT_ID="your_application_id"
@@ -57,13 +77,21 @@ The proxy uses a central proxy design and automatically discovers backends based
 
 1. Create configuration secret for the proxy and deploy the helm chart (**Ensure that you're using helm version v3.11.0 and above**)
 
+    Create the signing key, and store it in safe place (e.g. use a secrets vault like 1Password to create and store the key). 
+
     ```sh
     export GITLAB_URL="https://gitlab.com"
     export SIGNING_KEY="a_random_key_consisting_of_letters_numbers_and_special_chars"
+    ```
 
+    ```sh
     helm repo add gitlab-workspaces-proxy \
       https://gitlab.com/api/v4/projects/gitlab-org%2fremote-development%2fgitlab-workspaces-proxy/packages/helm/devel
+    ```
 
+    The default ingress class name being used is `nginx`. Please modify the `ingress.className` parameter if you are using a different ingress or ingress class.
+
+    ```sh
     helm repo update
 
     helm upgrade --install gitlab-workspaces-proxy \
@@ -80,8 +108,43 @@ The proxy uses a central proxy design and automatically discovers backends based
       --set="ingress.tls.workspaceDomainKey=$(cat $WORKSPACES_DOMAIN_KEY)" \
       --set="ingress.tls.wildcardDomainCert=$(cat $WILDCARD_DOMAIN_CERT)" \
       --set="ingress.tls.wildcardDomainKey=$(cat $WILDCARD_DOMAIN_KEY)" \
+      --set="ingress.host=$GITLAB_WORKSPACES_PROXY_DOMAIN" \
       --set="ingress.className=nginx"
     ```
+
+    Verify the created `Ingress` resource for the `gitlab-workspace` namespace:
+
+    ```sh 
+    kubectl get ingress -n gitlab-workspaces
+    ```
+
+    **Note**: Depending on which certificates you are using, they might require renewal. For example, Let's Encrypt certificates are valid for 3 months by default. After obtaining new certificates, re-run the `helm` command above to update the TLS certificates. 
+
+1. Final steps: Update your DNS records to point the domain, and a wildcard entry, to the external cluster IP.
+  
+    Run an external curl command to inspect the proxy pod logs. An authorization HTTP 400 error is expected here. The workspace creation in GitLab will take care of authorization handling.
+
+    Terminal 1:
+    ```sh
+    curl -L ${GITLAB_WORKSPACES_PROXY_DOMAIN} 
+    ```
+
+    Termainal 2:
+    ```sh
+    kubectl logs -f -l app.kubernetes.io/name=gitlab-workspaces-proxy -n gitlab-workspaces
+    ```
+
+
+### Troubleshooting 
+
+#### TLS certificate errors 
+
+Troublshoot TLS certificates errors by connecting to the proxy domain and inspecting the certificate issue. You can use `openssl`, `sslscan`, etc. 
+
+```sh 
+openssl s_client -connect ${GITLAB_WORKSPACES_PROXY_DOMAIN}:443
+```
+
 
 ## Local Development
 
