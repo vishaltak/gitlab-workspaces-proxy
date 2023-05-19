@@ -96,19 +96,20 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
 
     helm upgrade --install gitlab-workspaces-proxy \
       gitlab-workspaces-proxy/gitlab-workspaces-proxy \
-      --version 0.1.5 \
+      --version 0.1.6 \
       --namespace=gitlab-workspaces \
       --create-namespace \
-      --set="auth.client_id=$CLIENT_ID" \
-      --set="auth.client_secret=$CLIENT_SECRET" \
-      --set="auth.host=$GITLAB_URL" \
-      --set="auth.redirect_uri=$REDIRECT_URI" \
-      --set="auth.signing_key=$SIGNING_KEY" \
-      --set="ingress.tls.workspaceDomainCert=$(cat $WORKSPACES_DOMAIN_CERT)" \
-      --set="ingress.tls.workspaceDomainKey=$(cat $WORKSPACES_DOMAIN_KEY)" \
-      --set="ingress.tls.wildcardDomainCert=$(cat $WILDCARD_DOMAIN_CERT)" \
-      --set="ingress.tls.wildcardDomainKey=$(cat $WILDCARD_DOMAIN_KEY)" \
-      --set="ingress.host=$GITLAB_WORKSPACES_PROXY_DOMAIN" \
+      --set="auth.client_id=${CLIENT_ID}" \
+      --set="auth.client_secret=${CLIENT_SECRET}" \
+      --set="auth.host=${GITLAB_URL}" \
+      --set="auth.redirect_uri=${REDIRECT_URI}" \
+      --set="auth.signing_key=${SIGNING_KEY}" \
+      --set="ingress.host.workspaceDomain=${GITLAB_WORKSPACES_PROXY_DOMAIN}" \
+      --set="ingress.host.wildcardDomain=${GITLAB_WORKSPACES_WILDCARD_DOMAIN}" \
+      --set="ingress.tls.workspaceDomainCert=$(cat ${WORKSPACES_DOMAIN_CERT})" \
+      --set="ingress.tls.workspaceDomainKey=$(cat ${WORKSPACES_DOMAIN_KEY})" \
+      --set="ingress.tls.wildcardDomainCert=$(cat ${WILDCARD_DOMAIN_CERT})" \
+      --set="ingress.tls.wildcardDomainKey=$(cat ${WILDCARD_DOMAIN_KEY})" \
       --set="ingress.className=nginx"
     ```
 
@@ -120,20 +121,23 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
 
     **Note**: Depending on which certificates you are using, they might require renewal. For example, Let's Encrypt certificates are valid for 3 months by default. After obtaining new certificates, re-run the `helm` command above to update the TLS certificates. 
 
-1. Final steps: Update your DNS records to point the domain, and a wildcard entry, to the external cluster IP.
-  
-    Run an external curl command to inspect the proxy pod logs. An authorization HTTP 400 error is expected here. The workspace creation in GitLab will take care of authorization handling.
+1. Update your DNS records
+
+   Point the `${GITLAB_WORKSPACES_PROXY_DOMAIN}` and `${GITLAB_WORKSPACES_WILDCARD_DOMAIN}` to load balancer where your ingress controller is listening.
+
+   To test if the traffic is correctly reaching gitlab-workspaces-proxy, run an external curl command to inspect the proxy pod logs.
 
     Terminal 1:
     ```sh
-    curl -L ${GITLAB_WORKSPACES_PROXY_DOMAIN} 
+    curl -vL ${GITLAB_WORKSPACES_PROXY_DOMAIN} 
     ```
+    An authorization HTTP 400 error is expected here. The workspace creation in GitLab will take care of authorization handling.
 
-    Termainal 2:
+    Terminal 2:
     ```sh
     kubectl logs -f -l app.kubernetes.io/name=gitlab-workspaces-proxy -n gitlab-workspaces
     ```
-
+    In the logs, the error `could not find upstream workspace upstream not found` is expected in this case.
 
 ### Troubleshooting 
 
@@ -145,6 +149,30 @@ Troublshoot TLS certificates errors by connecting to the proxy domain and inspec
 openssl s_client -connect ${GITLAB_WORKSPACES_PROXY_DOMAIN}:443
 ```
 
+## Building and Publishing Assets
+
+```shell
+# build the image
+make docker-build
+
+# publish the image
+make docker-publish
+
+# package helm chart
+make helm-package
+
+# publish helm chart
+make helm-publish
+```
+
+If you want to update the container image version, change the configuration in the following places
+- `Makefile` - `CONTAINER_IMAGE_VERSION` variable
+- `helm/values.yaml` - `image.tag` variable
+
+If you want to update the helm chart version, change the configuration in the following places
+- `Makefile` - `CHART_VERSION` variable
+- `helm/Chart.yaml` - `version` variable
+- `helm/Chart.yaml` - `appVersion` variable if any changes have been made to the code
 
 ## Local Development
 
@@ -166,27 +194,7 @@ EOT
 make
 ```
 
-## Building and Publishing Assets
-
-```shell
-# build the image
-make docker-build
-
-# publish the image
-make docker-publish
-
-# package helm chart
-make helm-package
-
-# publish helm chart
-make helm-publish
-```
-
-If you want to update the image version, change the configuration in the following places
-- `Makefile` - `CONTAINER_IMAGE_VERSION` variable
-- `helm/values.yaml` - `image.tag` variable
-
-## Local Installation Instructions
+### Local Installation Instructions
 
 Follow the [Installation Instructions](#installation-instructions) outlined above
 
@@ -208,7 +216,7 @@ Follow the [Installation Instructions](#installation-instructions) outlined abov
     export WILDCARD_DOMAIN_KEY="${PWD}/workspaces.localdev.me+1-key.pem"
     ```
 
-1. Register an app on your GitLab instance -  - Follow the [Installation Instructions](#installation-instructions) outlined above.
+1. Register an app on your GitLab instance - Follow the [Installation Instructions](#installation-instructions) outlined above.
 
 1. Create configuration secret for the proxy and deploy the helm chart - Follow the [Installation Instructions](#installation-instructions) outlined above with the following overrides.
 

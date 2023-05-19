@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: registry.gitlab.com/gitlab-org/remote-development/gitlab-workspaces-proxy
   pullPolicy: Always
-  tag: "0.5"
+  tag: "0.6"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -32,7 +32,9 @@ service:
 
 ingress:
   enabled: true
-  host: workspaces.localdev.me
+  host:
+    workspaceDomain: "workspaces.localdev.me"
+    wildcardDomain: "*.workspaces.localdev.me"
   className: "nginx"
   annotations: {}
   tls:
