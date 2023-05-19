@@ -1,6 +1,6 @@
 module gitlab.com/remote-development/gitlab-workspaces-proxy
 
-go 1.18
+go 1.19
 
 require (
 	golang.org/x/sync v0.1.0
