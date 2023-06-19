@@ -34,9 +34,16 @@ func generateJWT(signingKey string, workspaceID string, expiresIn int) (string, 
 
 func validateJWT(signingKey, token string, workspaceID string) bool {
 	var claims Claims
-	tkn, err := jwt.ParseWithClaims(token, &claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(signingKey), nil
-	})
+	tkn, err := jwt.ParseWithClaims(
+		token,
+		&claims,
+		func(token *jwt.Token) (interface{}, error) {
+			return []byte(signingKey), nil
+		},
+		jwt.WithValidMethods([]string{
+			jwt.SigningMethodHS256.Name,
+		}),
+	)
 	if err != nil {
 		return false
 	}
