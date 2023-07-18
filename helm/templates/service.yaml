@@ -1,14 +1,47 @@
+{{- if .Values.http.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "gitlab-workspaces-proxy.fullname" . }}
+  name: {{ include "gitlab-workspaces-proxy.fullname" . }}-http
   labels:
     {{- include "gitlab-workspaces-proxy.labels" . | nindent 4 }}
+    {{- with .Values.service.http.labels }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.service.http.annotations }}
+  annotations:
+    {{- toYaml . | nindent 8 }}
+  {{- end }}
 spec:
-  type: {{ .Values.service.type }}
+  type: {{ .Values.service.http.type }}
   ports:
-    - port: {{ .Values.service.port }}
-      targetPort: {{ .Values.port }}
+    - port: {{ .Values.service.http.port }}
+      targetPort: {{ .Values.http.port }}
       protocol: TCP
   selector:
     {{- include "gitlab-workspaces-proxy.selectorLabels" . | nindent 4 }}
+{{ end }}
+---
+{{- if .Values.ssh.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gitlab-workspaces-proxy.fullname" . }}-ssh
+  labels:
+    {{- include "gitlab-workspaces-proxy.labels" . | nindent 4 }}
+    {{- with .Values.service.ssh.labels }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.service.ssh.annotations }}
+  annotations:
+    {{- toYaml . | nindent 8 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.ssh.type }}
+  ports:
+    - port: {{ .Values.service.ssh.port }}
+      targetPort: {{ .Values.ssh.port }}
+      protocol: TCP
+  selector:
+    {{- include "gitlab-workspaces-proxy.selectorLabels" . | nindent 4 }}
+{{ end }}

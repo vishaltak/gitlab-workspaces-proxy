@@ -137,13 +137,13 @@ func TestMiddleware(t *testing.T) {
 		{
 			description:        "When no cookie is present should redirect to auth url",
 			request:            httptest.NewRequest(http.MethodGet, "http://workspace1.workspaces.com", nil),
-			upstreams:          []upstream.HostMapping{{Host: "workspace1.workspaces.com", WorkspaceID: "1"}},
+			upstreams:          []upstream.HostMapping{{Hostname: "workspace1.workspaces.com", WorkspaceID: "1"}},
 			expectedStatusCode: http.StatusTemporaryRedirect,
 		},
 		{
 			description:        "When a valid cookie is present should return the result",
 			request:            generateRequestWithCookie(generateToken(t, 10, "1"), "http://workspace1.workspaces.com"),
-			upstreams:          []upstream.HostMapping{{Host: "workspace1.workspaces.com", WorkspaceID: "1"}},
+			upstreams:          []upstream.HostMapping{{Hostname: "workspace1.workspaces.com", WorkspaceID: "1"}},
 			expectedStatusCode: http.StatusOK,
 		},
 		{
@@ -167,7 +167,7 @@ func TestMiddleware(t *testing.T) {
 		{
 			description:        "When redirect uri is called with code and state, redirects to state",
 			request:            httptest.NewRequest(http.MethodGet, "http://workspaces.com/callback?code=123&state=http://workspace1.workspaces.com", nil),
-			upstreams:          []upstream.HostMapping{{Host: "workspace1.workspaces.com"}},
+			upstreams:          []upstream.HostMapping{{Hostname: "workspace1.workspaces.com"}},
 			expectedStatusCode: http.StatusTemporaryRedirect,
 		},
 	}

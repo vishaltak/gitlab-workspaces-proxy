@@ -13,6 +13,7 @@ require (
 	github.com/prometheus/client_golang v1.15.0
 	github.com/stretchr/testify v1.8.1
 	go.uber.org/zap v1.24.0
+	golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b
 	k8s.io/api v0.26.1
 	k8s.io/apimachinery v0.26.1
 	k8s.io/client-go v0.26.1

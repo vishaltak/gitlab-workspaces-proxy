@@ -4,6 +4,10 @@ auth:
   host: http://gdk.localdev.me:3000
   redirect_uri: http://workspaces.com:9876/auth/callback
   signing_key: passwordpassword
+ssh:
+  port: 2222
+  enabled: true
+metrics_path: "/v1/metrics"
 http:
   enabled: true
   port: 1234

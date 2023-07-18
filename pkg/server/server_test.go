@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/config"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
 	"go.uber.org/zap/zaptest"
 )
@@ -61,7 +62,7 @@ func TestStartServer(t *testing.T) {
 			expectedBody:       "Hello World",
 			upstreamsToAdd: []upstream.HostMapping{
 				{
-					Host:            "localhost",
+					Hostname:        "localhost",
 					BackendPort:     int32(port),
 					Backend:         u.Hostname(),
 					BackendProtocol: "http",
@@ -76,13 +77,13 @@ func TestStartServer(t *testing.T) {
 			expectedBody:       "Workspace not found",
 			upstreamsToAdd: []upstream.HostMapping{
 				{
-					Host:            "localhost",
+					Hostname:        "localhost",
 					BackendPort:     int32(port),
 					Backend:         u.Hostname(),
 					BackendProtocol: "http",
 				},
 				{
-					Host:            "localhost-two",
+					Hostname:        "localhost-two",
 					BackendPort:     int32(port),
 					Backend:         u.Hostname(),
 					BackendProtocol: "http",
@@ -101,7 +102,10 @@ func TestStartServer(t *testing.T) {
 
 			tracker := upstream.NewTracker(logger)
 			s := New(&Options{
-				Port:              tr.port,
+				HTTPConfig: config.HTTP{
+					Enabled: true,
+					Port:    tr.port,
+				},
 				AuthMiddleware:    emptyAuthHandler,
 				LoggingMiddleware: emptyLoggingHandler,
 				Logger:            logger,
@@ -114,7 +118,7 @@ func TestStartServer(t *testing.T) {
 			}
 
 			for _, u := range tr.upstreamsToRemove {
-				tracker.Delete(u)
+				tracker.DeleteByHostname(u)
 			}
 
 			go func() {
@@ -144,7 +148,10 @@ func TestMetricsPath(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	tracker := upstream.NewTracker(logger)
 	s := New(&Options{
-		Port:              port,
+		HTTPConfig: config.HTTP{
+			Enabled: true,
+			Port:    port,
+		},
 		AuthMiddleware:    emptyAuthHandler,
 		LoggingMiddleware: emptyLoggingHandler,
 		Logger:            logger,

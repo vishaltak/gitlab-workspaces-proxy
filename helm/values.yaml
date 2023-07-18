@@ -27,8 +27,16 @@ securityContext: {}
   # runAsUser: 1000
 
 service:
-  type: ClusterIP
-  port: 80
+  http:
+    type: ClusterIP
+    port: 80
+    labels: {}
+    annotations: {}
+  ssh:
+    type: LoadBalancer
+    port: 22
+    labels: {}
+    annotations: {}
 
 ingress:
   enabled: true
@@ -75,6 +83,14 @@ auth:
   redirect_uri: ""
   signing_key: ""
   protocol: https
-port: 9876
+http:
+  enabled: true
+  port: 9876
 metrics_path: /metrics
 log_level: info
+ssh:
+  enabled: true
+  port: 22
+  host_key: ""
+  backend_port: 60022
+  backend_username: "gitlab-workspaces"

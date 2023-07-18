@@ -44,11 +44,11 @@ spec:
           livenessProbe:
             httpGet:
               path: /metrics
-              port: {{ .Values.port }}
+              port: {{ .Values.http.port }}
           readinessProbe:
             httpGet:
               path: /metrics
-              port: {{ .Values.port }}
+              port: {{ .Values.http.port }}
           volumeMounts:
           - name: config
             mountPath: /app/config
