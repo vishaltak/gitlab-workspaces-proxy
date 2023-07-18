@@ -4,4 +4,6 @@ auth:
   redirect_uri: http://workspaces.com:9876/auth/callback
   signing_key: passwordpassword
 metrics_path: "/v1/metrics"
-port: 1234
+http:
+  enabled: true
+  port: 1234

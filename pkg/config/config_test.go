@@ -14,8 +14,10 @@ func TestLoadConfig(t *testing.T) {
 		expectedError        bool
 		expectedAuthClientID string
 		expectedMetricsPath  string
-		expectedPort         int
+		expectedHTTPPort     int
 		expectedLogLevel     string
+		expectedSSHPort      int
+		expectedSSHEnabled   bool
 	}{
 		{
 			description:          "When invalid filename is passed throws error",
@@ -30,7 +32,7 @@ func TestLoadConfig(t *testing.T) {
 			expectedError:        false,
 			expectedAuthClientID: "CLIENT_ID",
 			expectedMetricsPath:  "/v1/metrics",
-			expectedPort:         1234,
+			expectedHTTPPort:     1234,
 			expectedLogLevel:     "info",
 		},
 		{
@@ -39,7 +41,7 @@ func TestLoadConfig(t *testing.T) {
 			expectedError:        false,
 			expectedAuthClientID: "CLIENT_ID",
 			expectedMetricsPath:  "/metrics",
-			expectedPort:         1234,
+			expectedHTTPPort:     1234,
 			expectedLogLevel:     "info",
 		},
 		{
@@ -48,7 +50,7 @@ func TestLoadConfig(t *testing.T) {
 			expectedError:        false,
 			expectedAuthClientID: "CLIENT_ID",
 			expectedMetricsPath:  "/metrics",
-			expectedPort:         9876,
+			expectedHTTPPort:     9876,
 			expectedLogLevel:     "info",
 		},
 		{
@@ -62,8 +64,19 @@ func TestLoadConfig(t *testing.T) {
 			expectedError:        false,
 			expectedAuthClientID: "CLIENT_ID",
 			expectedMetricsPath:  "/metrics",
-			expectedPort:         9876,
+			expectedHTTPPort:     9876,
 			expectedLogLevel:     "debug",
+		},
+		{
+			description:          "When the SSH section is present, sets values",
+			filename:             "./fixtures/sample_with_ssh_details.yaml",
+			expectedError:        false,
+			expectedAuthClientID: "CLIENT_ID",
+			expectedMetricsPath:  "/v1/metrics",
+			expectedHTTPPort:     1234,
+			expectedLogLevel:     "info",
+			expectedSSHPort:      2222,
+			expectedSSHEnabled:   true,
 		},
 	}
 
@@ -78,8 +91,10 @@ func TestLoadConfig(t *testing.T) {
 			require.Nil(t, err)
 			require.Equal(t, tr.expectedAuthClientID, config.Auth.ClientID)
 			require.Equal(t, tr.expectedMetricsPath, config.MetricsPath)
-			require.Equal(t, tr.expectedPort, config.Port)
+			require.Equal(t, tr.expectedHTTPPort, config.HTTP.Port)
 			require.Equal(t, tr.expectedLogLevel, config.LogLevel)
+			require.Equal(t, tr.expectedSSHEnabled, config.SSH.Enabled)
+			require.Equal(t, tr.expectedSSHPort, config.SSH.Port)
 		})
 	}
 }

@@ -93,7 +93,7 @@ func handleRedirect(
 			errorResponse(log, fmt.Errorf("could not authorize request %s", err), w)
 			return
 		}
-		log.Debug("Authorization verified", zap.String("workspace", workspace.Host))
+		log.Debug("Authorization verified", zap.String("workspace", workspace.Hostname))
 
 		// Create JWT for cookie
 		signedJwt, err := generateJWT(config.SigningKey, workspace.WorkspaceID, token.ExpiresIn)
@@ -178,7 +178,7 @@ func getWorkspaceFromURL(url string, upstreams *upstream.Tracker) (*upstream.Hos
 		return nil, fmt.Errorf("could not parse workspace from host %s", err)
 	}
 
-	upstream, err := upstreams.Get(hostname)
+	upstream, err := upstreams.GetByHostname(hostname)
 	if err != nil {
 		return nil, fmt.Errorf("could not find upstream workspace %s", err)
 	}

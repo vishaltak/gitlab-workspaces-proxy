@@ -26,7 +26,6 @@ const (
 )
 
 func main() { //nolint:cyclop
-	port := flag.Int("port", 9876, "Port on which to listen")
 	configFile := flag.String("config", "", "The config file to use")
 	kubeconfig := flag.String("kubeconfig", "", "The kubernetes config file")
 
@@ -76,12 +75,14 @@ func main() { //nolint:cyclop
 	authMiddleware := auth.NewMiddleware(logger, &cfg.Auth, upstreamTracker, apiFactory)
 
 	opts := &server.Options{
-		Port:              *port,
+		HTTPConfig:        cfg.HTTP,
+		SSHConfig:         cfg.SSH,
 		LoggingMiddleware: loggingMiddleware,
 		AuthMiddleware:    authMiddleware,
 		Logger:            logger,
 		Tracker:           upstreamTracker,
 		MetricsPath:       cfg.MetricsPath,
+		APIFactory:        apiFactory,
 	}
 
 	s := server.New(opts)
@@ -103,7 +104,7 @@ func main() { //nolint:cyclop
 		case k8s.InformerActionUpdate:
 			addPorts(workspaceID, workspaceHostTemplate, upstreamTracker, svc, logger)
 		case k8s.InformerActionDelete:
-			upstreamTracker.Delete(workspaceHostTemplate)
+			upstreamTracker.DeleteByHostname(workspaceHostTemplate)
 		}
 	})
 	if err != nil {
@@ -132,11 +133,12 @@ func addPorts(workspaceID string, workspaceHostTemplate string, tracker *upstrea
 		}
 
 		tracker.Add(upstream.HostMapping{
-			Host:            h.String(),
+			Hostname:        h.String(),
 			BackendPort:     port.Port,
 			Backend:         fmt.Sprintf("%s.%s", svc.ObjectMeta.Name, svc.ObjectMeta.Namespace),
 			BackendProtocol: "http",
 			WorkspaceID:     workspaceID,
+			WorkspaceName:   svc.ObjectMeta.Name,
 		})
 	}
 }
