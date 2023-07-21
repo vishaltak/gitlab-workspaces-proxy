@@ -7,3 +7,5 @@ coverage.*
 env.sh
 *.pem
 *.tgz
+ssh-host-key
+ssh-host-key.pub

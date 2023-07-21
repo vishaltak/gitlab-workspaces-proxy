@@ -7,7 +7,8 @@ COPY ./go.sum .
 
 RUN go mod download
 
-COPY . .
+COPY ./main.go .
+COPY ./pkg ./pkg
 
 RUN CGO_ENABLED=0 go build -o proxy main.go
 

@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: registry.gitlab.com/gitlab-org/remote-development/gitlab-workspaces-proxy
   pullPolicy: Always
-  tag: "0.7"
+  tag: "0.8"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -34,6 +34,7 @@ service:
     annotations: {}
   ssh:
     type: LoadBalancer
+    loadBalancerIP: "" # Leave this empty to allocate a new IP address.
     port: 22
     labels: {}
     annotations: {}
