@@ -38,6 +38,7 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.service.ssh.type }}
+  loadBalancerIP: {{ .Values.service.ssh.loadBalancerIP }}
   ports:
     - port: {{ .Values.service.ssh.port }}
       targetPort: {{ .Values.ssh.port }}
