@@ -92,14 +92,16 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	if s.opts.SSHConfig.Enabled {
+		readyCh := make(chan struct{})
 		eg.Go(func() error {
 			s.opts.Logger.Info("Starting SSH proxy server...", zap.Int("port", s.opts.SSHConfig.Port))
-			proxy, err := sshproxy.New(s.opts.Logger, s.opts.Tracker, &s.opts.SSHConfig, s.opts.APIFactory)
+			proxy, err := sshproxy.New(groupCtx, s.opts.Logger, s.opts.Tracker, &s.opts.SSHConfig, s.opts.APIFactory)
 			if err != nil {
 				return err
 			}
-			return proxy.Start(fmt.Sprintf("0.0.0.0:%d", s.opts.SSHConfig.Port))
+			return proxy.Start(groupCtx, fmt.Sprintf("0.0.0.0:%d", s.opts.SSHConfig.Port), readyCh, nil)
 		})
+		<-readyCh
 	}
 
 	if !s.opts.HTTPConfig.Enabled && !s.opts.SSHConfig.Enabled {

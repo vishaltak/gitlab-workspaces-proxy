@@ -21,9 +21,9 @@ func (p *sshProxy) copyRequests(reqChannel <-chan *ssh.Request, conn ssh.Conn) {
 	}
 }
 
-func (p *sshProxy) copyData(target ssh.Conn, source <-chan ssh.NewChannel) { //nolint:cyclop
+func (p *sshProxy) copyData(ctx context.Context, target ssh.Conn, source <-chan ssh.NewChannel) { //nolint:cyclop
 	for srcCh := range source {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(ctx)
 
 		go func(s ssh.NewChannel) {
 			targetChannel, targetRequestChannel, err := target.OpenChannel(s.ChannelType(), s.ExtraData())
