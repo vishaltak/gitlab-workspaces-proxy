@@ -2,8 +2,10 @@ package sshproxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/config"
@@ -24,7 +26,7 @@ type sshProxy struct {
 	commonSSHConfig *ssh.ServerConfig
 }
 
-func New(logger *zap.Logger, tracker *upstream.Tracker, sshConfig *config.SSH, apiFactory gitlab.APIFactory) (*sshProxy, error) {
+func New(ctx context.Context, logger *zap.Logger, tracker *upstream.Tracker, sshConfig *config.SSH, apiFactory gitlab.APIFactory) (*sshProxy, error) {
 	hostKeySigner, err := ssh.ParsePrivateKey([]byte(sshConfig.HostKey))
 	if err != nil {
 		logger.Error("Error reading host key", zap.Error(err))
@@ -35,7 +37,7 @@ func New(logger *zap.Logger, tracker *upstream.Tracker, sshConfig *config.SSH, a
 		MaxAuthTries: MaxAuthTries,
 		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			// Validate password using API call
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+			ctx, cancel := context.WithTimeout(ctx, time.Second*60)
 			defer cancel()
 
 			// We are using the workspace name as the user name so that we can identify the correct workspace
@@ -67,10 +69,9 @@ func New(logger *zap.Logger, tracker *upstream.Tracker, sshConfig *config.SSH, a
 	}, nil
 }
 
-func (p *sshProxy) handleSSHConnection(incomingConn net.Conn) {
+func (p *sshProxy) handleSSHConnection(ctx context.Context, incomingConn net.Conn) {
 	defer p.closeConnectionAndLogError(incomingConn, "error closing incoming connection", "unknown")
 
-	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -116,8 +117,8 @@ func (p *sshProxy) handleSSHConnection(incomingConn net.Conn) {
 
 	go p.copyRequests(clientReqChannel, backendConn)
 	go p.copyRequests(backendReqChannel, clientConn)
-	go p.copyData(clientConn, backendChannel)
-	go p.copyData(backendConn, clientChannel)
+	go p.copyData(ctx, clientConn, backendChannel)
+	go p.copyData(ctx, backendConn, clientChannel)
 
 	go func() {
 		err = clientConn.Wait()
@@ -137,22 +138,45 @@ func (p *sshProxy) handleSSHConnection(incomingConn net.Conn) {
 	<-ctx.Done()
 }
 
-func (p *sshProxy) Start(listenAddr string) error {
+func (p *sshProxy) Start(ctx context.Context, listenAddr string, readyCh chan<- struct{}, stopCh chan<- struct{}) error {
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		p.log.Error("failed to start proxy server.", zap.Error(err))
-		return fmt.Errorf("failed to start proxy server: %v", err)
+		p.log.Error("failed to start ssh proxy server.", zap.Error(err))
+		return fmt.Errorf("failed to start ssh proxy server: %v", err)
+	}
+
+	go func() {
+		<-ctx.Done()
+		err = listener.Close()
+		if err != nil {
+			p.log.Error("failed to close listener for ssh proxy", zap.Error(err))
+		}
+	}()
+
+	if readyCh != nil {
+		readyCh <- struct{}{}
 	}
 
 	for {
 		incomingConn, err := listener.Accept()
 		if err != nil {
-			p.log.Error("Failed to accept incoming connection: %v", zap.Error(err))
+			// We need to detect if the connection was closed due to the context being cancelled, if so
+			// then we shouldn't continue the loop
+			if errors.Is(err, net.ErrClosed) || strings.Contains(err.Error(), "use of closed network connection") {
+				break
+			}
+			p.log.Error("Failed to accept incoming connection", zap.Error(err))
 			continue
 		}
 
-		go p.handleSSHConnection(incomingConn)
+		go p.handleSSHConnection(ctx, incomingConn)
 	}
+
+	if stopCh != nil {
+		stopCh <- struct{}{}
+	}
+
+	return nil
 }
 
 func validateWorkspaceOwnership(ctx context.Context, workspaceName, password string, tracker *upstream.Tracker, apiFactory gitlab.APIFactory) error {
