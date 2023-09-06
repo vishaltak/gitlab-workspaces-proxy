@@ -77,10 +77,10 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
 
 1. Generate SSH Host Keys. In this example we are generating an RSA key, however you can generate a ECDSA variant as well.
 
-  ```sh
-  ssh-keygen -f ssh-host-key -N '' -t rsa 
-  export SSH_HOST_KEY=$(pwd)/ssh-host-key
-  ```
+    ```sh
+    ssh-keygen -f ssh-host-key -N '' -t rsa 
+    export SSH_HOST_KEY=$(pwd)/ssh-host-key
+    ```
 
 1. Create configuration secret for the proxy and deploy the helm chart (**Ensure that you're using helm version v3.11.0 and above**)
 
