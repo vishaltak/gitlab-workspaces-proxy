@@ -15,7 +15,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: {{ include "gitlab-workspaces-proxy.serviceAccountName" . }}
-  namespace: gitlab-workspaces
+  namespace: {{ $.Release.Namespace }}
 roleRef:
   name: {{ include "gitlab-workspaces-proxy.fullname" . }}
   kind: ClusterRole
