@@ -127,7 +127,14 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
     kubectl get ingress -n gitlab-workspaces
     ```
 
-    **Note**: Depending on which certificates you are using, they might require renewal. For example, Let's Encrypt certificates are valid for 3 months by default. After obtaining new certificates, re-run the `helm` command above to update the TLS certificates. 
+    **Note**:
+    - Depending on which certificates you are using, they might require renewal. For example, Let's Encrypt certificates are valid for 3 months by default. After obtaining new certificates, re-run the `helm` command above to update the TLS certificates. 
+    - If you deploy the helm chart to any other namespace than the configured default(`gitlab-workspaces`), please ensure that the same is reflected in the agent configuration
+      ```yaml
+      remote_development:
+        gitlab_workspaces_proxy:
+          namespace: whatever-your-namespace-is
+      ```
 
 1. Update your DNS records
 
