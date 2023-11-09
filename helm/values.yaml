@@ -46,11 +46,11 @@ ingress:
     wildcardDomain: "*.workspaces.localdev.me"
   className: "nginx"
   annotations: {}
-  tls:
-    workspaceDomainCert: ""
-    workspaceDomainKey: ""
-    wildcardDomainCert: ""
-    wildcardDomainKey: ""
+  tls: {}
+    # workspaceDomainCert: ""
+    # workspaceDomainKey: ""
+    # wildcardDomainCert: ""
+    # wildcardDomainKey: ""
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
