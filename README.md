@@ -6,7 +6,7 @@ The proxy uses a central proxy design and automatically discovers backends based
 
 ## Installation Instructions
 
-Ensure that your Kubernetes cluster is running, and an Ingress controller is installed. `kubectl` and `helm` are required on your local machine for the installation steps. 
+Ensure that your Kubernetes cluster is running, and an Ingress controller is installed. `kubectl` and `helm` are required on your local machine for the installation steps.
 
 1. Generate TLS certificates
 
@@ -15,8 +15,8 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
     - The domain on which all workspaces will be available. We'll call this `GITLAB_WORKSPACES_WILDCARD_DOMAIN`.
 
     You can generate certificates from any certificate authority.
-    
-    Here's an example using Let's Encrypt using [certbot](https://certbot.eff.org/). The CLI wizard will ask you for the ACME DNS challenge, and requires you to create TXT records at your DNS provider. 
+
+    Here's an example using Let's Encrypt using [certbot](https://certbot.eff.org/). The CLI wizard will ask you for the ACME DNS challenge, and requires you to create TXT records at your DNS provider.
 
     ```sh
     brew install certbot
@@ -44,7 +44,7 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
       --preferred-challenges dns certonly
     ```
 
-    Note the certificate directories from the output, and update the environment variables below. 
+    Note the certificate directories from the output, and update the environment variables below.
 
     ```
     export WORKSPACES_DOMAIN_CERT="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/fullchain.pem"
@@ -53,14 +53,14 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
     export WILDCARD_DOMAIN_KEY="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_WILDCARD_DOMAIN}/privkey.pem"
     ```
 
-    Optional: The `certbot` command sometimes creates a different path for the wildcard domain, using the proxy domain and a `-0001` prefix. 
+    Optional: The `certbot` command sometimes creates a different path for the wildcard domain, using the proxy domain and a `-0001` prefix.
 
     ```
     export WORKSPACES_DOMAIN_CERT="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/fullchain.pem"
     export WORKSPACES_DOMAIN_KEY="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}/privkey.pem"
     export WILDCARD_DOMAIN_CERT="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}-0001/fullchain.pem"
     export WILDCARD_DOMAIN_KEY="${HOME}/.certbot/config/live/${GITLAB_WORKSPACES_PROXY_DOMAIN}-0001/privkey.pem"
-    ```    
+    ```
 
 1. Register an app on your GitLab instance
 
@@ -78,13 +78,13 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
 1. Generate SSH Host Keys. In this example we are generating an RSA key, however you can generate a ECDSA variant as well.
 
     ```sh
-    ssh-keygen -f ssh-host-key -N '' -t rsa 
+    ssh-keygen -f ssh-host-key -N '' -t rsa
     export SSH_HOST_KEY=$(pwd)/ssh-host-key
     ```
 
 1. Create configuration secret for the proxy and deploy the helm chart (**Ensure that you're using helm version v3.11.0 and above**)
 
-    Create the signing key, and store it in safe place (e.g. use a secrets vault like 1Password to create and store the key). 
+    Create the signing key, and store it in safe place (e.g. use a secrets vault like 1Password to create and store the key).
 
     ```sh
     export GITLAB_URL="https://gitlab.com"
@@ -123,12 +123,12 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
 
     Verify the created `Ingress` resource for the `gitlab-workspace` namespace:
 
-    ```sh 
+    ```sh
     kubectl get ingress -n gitlab-workspaces
     ```
 
     **Note**:
-    - Depending on which certificates you are using, they might require renewal. For example, Let's Encrypt certificates are valid for 3 months by default. After obtaining new certificates, re-run the `helm` command above to update the TLS certificates. 
+    - Depending on which certificates you are using, they might require renewal. For example, Let's Encrypt certificates are valid for 3 months by default. After obtaining new certificates, re-run the `helm` command above to update the TLS certificates.
     - If you deploy the helm chart to any other namespace than the configured default(`gitlab-workspaces`), please ensure that the same is reflected in the agent configuration
       ```yaml
       remote_development:
@@ -144,7 +144,7 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
 
     Terminal 1:
     ```sh
-    curl -vL ${GITLAB_WORKSPACES_PROXY_DOMAIN} 
+    curl -vL ${GITLAB_WORKSPACES_PROXY_DOMAIN}
     ```
     An authorization HTTP 400 error is expected here. The workspace creation in GitLab will take care of authorization handling.
 
@@ -154,17 +154,26 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
     ```
     In the logs, the error `could not find upstream workspace upstream not found` is expected in this case.
 
-### Troubleshooting 
+### Troubleshooting
 
-#### TLS certificate errors 
+#### TLS certificate errors
 
-Troublshoot TLS certificates errors by connecting to the proxy domain and inspecting the certificate issue. You can use `openssl`, `sslscan`, etc. 
+Troublshoot TLS certificates errors by connecting to the proxy domain and inspecting the certificate issue. You can use `openssl`, `sslscan`, etc.
 
-```sh 
+```sh
 openssl s_client -connect ${GITLAB_WORKSPACES_PROXY_DOMAIN}:443
 ```
 
 ## Building and Publishing Assets
+
+If you want to update the container image version, change the configuration in the following places
+- `Makefile` - `CONTAINER_IMAGE_VERSION` variable
+- `helm/values.yaml` - `image.tag` variable
+
+If you want to update the helm chart version, change the configuration in the following places
+- `Makefile` - `CHART_VERSION` variable
+- `helm/Chart.yaml` - `version` variable
+- `helm/Chart.yaml` - `appVersion` variable if any changes have been made to the code
 
 ```shell
 # build the image
@@ -179,15 +188,6 @@ make helm-package
 # publish helm chart
 make helm-publish
 ```
-
-If you want to update the container image version, change the configuration in the following places
-- `Makefile` - `CONTAINER_IMAGE_VERSION` variable
-- `helm/values.yaml` - `image.tag` variable
-
-If you want to update the helm chart version, change the configuration in the following places
-- `Makefile` - `CHART_VERSION` variable
-- `helm/Chart.yaml` - `version` variable
-- `helm/Chart.yaml` - `appVersion` variable if any changes have been made to the code
 
 ## Local Development
 

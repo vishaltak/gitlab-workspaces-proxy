@@ -4,7 +4,7 @@ CONTAINER_IMAGE_NAME = registry.gitlab.com/gitlab-org/remote-development/gitlab-
 CONTAINER_IMAGE_VERSION = 0.8
 CONTAINER_IMAGE_NAME_WITH_VERSION = $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_VERSION)
 
-CHART_VERSION = 0.1.9
+CHART_VERSION = 0.1.10
 
 # Dependency versions
 GOTESTSUM_VERSION = 0.6.0
@@ -18,13 +18,13 @@ clean:
 
 lint: bin/golangci-lint tidy fmt vet
 	@./bin/golangci-lint run
-	
+
 vet:
 	@go vet ./...
 
 fmt:
 	@go fmt ./...
-	
+
 build:
 	@mkdir -p bin
 	@go build -o proxy
@@ -56,7 +56,7 @@ bin/gotestsum-${GOTESTSUM_VERSION}:
 
 bin/golangci-lint:
 	@mkdir -p bin
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s 
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s
 
 run-backends:
 	docker rm -vf nginx && \
