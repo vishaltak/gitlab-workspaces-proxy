@@ -3,8 +3,10 @@
 This proxy is responsible for authentication and authorization of the [workspaces](https://docs.gitlab.com/ee/user/workspace/) running in the cluster.
 The proxy uses a central proxy design and automatically discovers backends based on annotations on the service.
 
-
 ## Installation Instructions
+
+**NOTE: If you are installing for local development, the instructions are slightly different for the initial steps, and you should
+start at [Local Installation Instructions](#local-installation-instructions) below.**
 
 Ensure that your Kubernetes cluster is running, and an Ingress controller is installed. `kubectl` and `helm` are required on your local machine for the installation steps.
 
