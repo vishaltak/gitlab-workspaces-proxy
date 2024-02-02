@@ -105,7 +105,7 @@ Ensure that your Kubernetes cluster is running, and an Ingress controller is ins
 
     helm upgrade --install gitlab-workspaces-proxy \
       gitlab-workspaces-proxy/gitlab-workspaces-proxy \
-      --version 0.1.10 \
+      --version 0.1.11 \
       --namespace=gitlab-workspaces \
       --create-namespace \
       --set="auth.client_id=${CLIENT_ID}" \
