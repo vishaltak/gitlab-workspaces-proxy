@@ -28,15 +28,11 @@ stages:
 
 lint:
   extends: .go-cache
-  image: registry.gitlab.com/gitlab-org/gitlab-build-images:golangci-lint-1.50-alpine
+  image: golangci/golangci-lint:v1.56.2-alpine
   stage: test
   script:
     - golangci-lint --version
-    # Use default .golangci.yml file from the image if one is not present in the project root.
-    - '[ -e .golangci.yml ] || cp /golangci/.golangci.yml .'
-    # Write the code coverage report to gl-code-quality-report.json
-    # remove `--issues-exit-code 0` or set to non-zero to fail the job if linting issues are detected
-    - golangci-lint run --out-format colored-line-number:stdout,code-climate:gl-code-quality-report.json
+    - golangci-lint run
   artifacts:
     reports:
       codequality: gl-code-quality-report.json
