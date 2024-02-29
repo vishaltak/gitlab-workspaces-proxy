@@ -5,6 +5,7 @@ proxy
 bin
 coverage.*
 env.sh
+gl-code-quality-report.json
 *.pem
 *.tgz
 ./ssh-host-key
