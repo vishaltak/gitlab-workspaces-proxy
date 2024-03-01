@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/internal/logz"
@@ -79,6 +80,7 @@ func New(ctx context.Context, logger *zap.Logger, tracker *upstream.Tracker, ssh
 	}, nil
 }
 
+// handleSSHConnection should always be called in a goroutine.
 func (p *SSHProxy) handleSSHConnection(ctx context.Context, incomingConn net.Conn) {
 	clientConn, clientChannel, clientReqChannel, err := ssh.NewServerConn(incomingConn, p.commonSSHConfig)
 	if err != nil {
@@ -127,12 +129,35 @@ func (p *SSHProxy) handleSSHConnection(ctx context.Context, incomingConn net.Con
 		return
 	}
 
-	p.copyRequests(connCtx, clientReqChannel, backendConn)
-	p.copyRequests(connCtx, backendReqChannel, clientConn)
-	p.copyData(connCtx, clientConn, backendChannel)
-	p.copyData(connCtx, backendConn, clientChannel)
+	var wg sync.WaitGroup
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		p.copyRequests(connCtx, clientReqChannel, backendConn)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		p.copyRequests(connCtx, backendReqChannel, clientConn)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		p.copyData(connCtx, clientConn, backendChannel)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		p.copyData(connCtx, backendConn, clientChannel)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		waitErr := clientConn.Wait()
 		if waitErr != nil {
 			p.log.Error("failed to wait for client connection", logz.Error(waitErr), logz.WorkspaceName(workspaceName))
@@ -140,7 +165,9 @@ func (p *SSHProxy) handleSSHConnection(ctx context.Context, incomingConn net.Con
 		}
 	}()
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		waitErr := backendConn.Wait()
 		if waitErr != nil {
 			p.log.Error("failed to wait for backend connection", logz.Error(waitErr), logz.WorkspaceName(workspaceName))
@@ -148,7 +175,7 @@ func (p *SSHProxy) handleSSHConnection(ctx context.Context, incomingConn net.Con
 		}
 	}()
 
-	<-connCtx.Done()
+	wg.Wait()
 }
 
 func (p *SSHProxy) Start(ctx context.Context, listenAddr string, readyCh chan<- struct{}, stopCh chan<- struct{}) error {
