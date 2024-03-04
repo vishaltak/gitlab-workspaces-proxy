@@ -135,18 +135,18 @@ func TestServerAuth(t *testing.T) {
 	require.NoError(t, err)
 
 	tt := []struct {
-		description   string
-		port          int
-		userID        int
-		upstream      *upstream.HostMapping
-		workspaceName string
-		expectError   bool
+		description         string
+		port                int
+		userID              int
+		upstreamHostMapping *upstream.HostMapping
+		workspaceName       string
+		expectError         bool
 	}{
 		{
 			description: "Server does not accept connections when no upstreams are found",
 			port:        30011,
 			userID:      1,
-			upstream: &upstream.HostMapping{
+			upstreamHostMapping: &upstream.HostMapping{
 				Hostname:      "myworkspace1",
 				WorkspaceID:   "myworkspace1",
 				WorkspaceName: "myworkspace1",
@@ -158,7 +158,7 @@ func TestServerAuth(t *testing.T) {
 			description: "Server does not accept connections when upstream found but PAT not validated",
 			port:        30012,
 			userID:      2,
-			upstream: &upstream.HostMapping{
+			upstreamHostMapping: &upstream.HostMapping{
 				Hostname:      "myworkspace",
 				WorkspaceID:   "myworkspace",
 				WorkspaceName: "myworkspace",
@@ -170,7 +170,7 @@ func TestServerAuth(t *testing.T) {
 			description: "Server does accept connections when upstream found and PAT is correct",
 			port:        30013,
 			userID:      1,
-			upstream: &upstream.HostMapping{
+			upstreamHostMapping: &upstream.HostMapping{
 				Hostname:      "myworkspace",
 				WorkspaceID:   "myworkspace",
 				WorkspaceName: "myworkspace",
@@ -186,8 +186,8 @@ func TestServerAuth(t *testing.T) {
 			defer cancel()
 
 			tracker := upstream.NewTracker(logger)
-			if test.upstream != nil {
-				tracker.Add(*test.upstream)
+			if test.upstreamHostMapping != nil {
+				tracker.Add(*test.upstreamHostMapping)
 			}
 
 			server, err := New(ctx, logger, tracker, &config.SSH{
@@ -210,7 +210,7 @@ func TestServerAuth(t *testing.T) {
 			serverConn, err := net.Dial("tcp", serverAddr)
 			require.NoError(t, err)
 			defer func() {
-				serverConn.Close()
+				_ = serverConn.Close()
 				cancel()
 				<-stopCh
 				_ = logger.Sync()

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/internal/logz"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/config"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/gitlab"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/sshproxy"
@@ -52,7 +53,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	targetURL, err := url.Parse(fmt.Sprintf("%s://%s:%d", workspaceHostMapping.BackendProtocol, workspaceHostMapping.Backend, workspaceHostMapping.BackendPort))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		s.opts.Logger.Info("Error in parsing url", zap.String("url", targetURL.String()), zap.Error(err))
+		s.opts.Logger.Info("failed to parse workspace url",
+			logz.Error(err),
+			logz.WorkspaceURL(targetURL.String()),
+		)
 		return
 	}
 
@@ -69,7 +73,8 @@ func (s *Server) Start(ctx context.Context) error {
 
 	eg.Go(func() error {
 		<-groupCtx.Done()
-		if err := srv.Shutdown(context.Background()); err != nil { //nolint:golint,contextcheck
+		// nolint:golint,contextcheck
+		if err := srv.Shutdown(context.Background()); err != nil {
 			return err
 		}
 		return nil
@@ -77,7 +82,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	if s.opts.HTTPConfig.Enabled {
 		eg.Go(func() error {
-			s.opts.Logger.Info("Starting HTTP proxy server...", zap.Int("port", s.opts.HTTPConfig.Port))
+			s.opts.Logger.Info("attempting to start HTTP proxy server", logz.Port(s.opts.HTTPConfig.Port))
 			mainHandler := s.opts.LoggingMiddleware(s.opts.AuthMiddleware(s))
 
 			mux := http.NewServeMux()
@@ -94,7 +99,7 @@ func (s *Server) Start(ctx context.Context) error {
 	if s.opts.SSHConfig.Enabled {
 		readyCh := make(chan struct{})
 		eg.Go(func() error {
-			s.opts.Logger.Info("Starting SSH proxy server...", zap.Int("port", s.opts.SSHConfig.Port))
+			s.opts.Logger.Info("attempting to start SSH proxy server", logz.Port(s.opts.SSHConfig.Port))
 			proxy, err := sshproxy.New(groupCtx, s.opts.Logger, s.opts.Tracker, &s.opts.SSHConfig, s.opts.APIFactory)
 			if err != nil {
 				return err

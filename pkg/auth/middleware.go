@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/internal/logz"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/gitlab"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
 	"go.uber.org/zap"
@@ -24,7 +25,7 @@ type Config struct {
 type HTTPMiddleware func(http.Handler) http.Handler
 
 func NewMiddleware(
-	log *zap.Logger,
+	logger *zap.Logger,
 	config *Config,
 	upstreams *upstream.Tracker,
 	apiFactory gitlab.APIFactory,
@@ -34,7 +35,7 @@ func NewMiddleware(
 			// TODO: refactor this block - https://gitlab.com/gitlab-org/gitlab/-/issues/408340
 			// Check path if callback then get token and set cookie
 			if isRedirectURI(config, r) {
-				handleRedirect(log, r, w, config, upstreams, apiFactory)
+				handleRedirect(logger, r, w, config, upstreams, apiFactory)
 				return
 			}
 
@@ -42,11 +43,15 @@ func NewMiddleware(
 			if config.Protocol != "" {
 				protocol = config.Protocol
 			}
-			url := fmt.Sprintf("%s://%s%s%s%s", protocol, r.Host, r.URL.Port(), r.URL.Path, r.URL.RawQuery)
-			log.Debug("finding upstream with url", zap.String("url", url))
-			workspace, err := getWorkspaceFromURL(url, upstreams)
+			workspaceURL := fmt.Sprintf("%s://%s%s%s%s", protocol, r.Host, r.URL.Port(), r.URL.Path, r.URL.RawQuery)
+			logger.Debug("attempting to find workspace upstream from url", logz.WorkspaceURL(workspaceURL))
+			workspace, err := getWorkspaceFromURL(workspaceURL, upstreams)
 			if err != nil {
-				errorResponse(log, err, w)
+				w.WriteHeader(http.StatusBadRequest)
+				logger.Error("failed to find workspace upstream from url",
+					logz.Error(err),
+					logz.WorkspaceURL(workspaceURL),
+				)
 				return
 			}
 
@@ -62,7 +67,7 @@ func NewMiddleware(
 }
 
 func handleRedirect(
-	log *zap.Logger,
+	logger *zap.Logger,
 	r *http.Request,
 	w http.ResponseWriter,
 	config *Config,
@@ -72,33 +77,47 @@ func handleRedirect(
 	if authCode, ok := r.URL.Query()["code"]; ok {
 		token, err := getToken(r.Context(), config, authCode[0])
 		if err != nil {
-			errorResponse(log, fmt.Errorf("error getting token %s", err), w)
+			w.WriteHeader(http.StatusBadRequest)
+			logger.Error("failed to find token in the request", logz.Error(err))
 			return
 		}
 
 		state := r.URL.Query().Get("state")
 		if state == "" {
-			errorResponse(log, fmt.Errorf("state not present in request"), w)
+			w.WriteHeader(http.StatusBadRequest)
+			logger.Error("failed to find state in the request", logz.Error(err))
 			return
 		}
 
 		workspace, err := getWorkspaceFromURL(state, upstreams)
 		if err != nil {
-			errorResponse(log, err, w)
+			w.WriteHeader(http.StatusBadRequest)
+			logger.Error("failed to find workspace upstream from state",
+				logz.Error(err),
+				logz.WorkspaceURL(state),
+			)
 		}
 
-		log.Debug("Checking authorization", zap.String("workspace", workspace.WorkspaceID))
+		logger.Debug("attempting to authorize workspace access request", logz.WorkspaceName(workspace.WorkspaceName))
 		err = checkAuthorization(r.Context(), token.AccessToken, workspace.WorkspaceID, apiFactory)
 		if err != nil {
-			errorResponse(log, fmt.Errorf("could not authorize request %s", err), w)
+			w.WriteHeader(http.StatusBadRequest)
+			logger.Error("failed to authorize workspace access request",
+				logz.Error(err),
+				logz.WorkspaceName(workspace.WorkspaceName),
+			)
 			return
 		}
-		log.Debug("Authorization verified", zap.String("workspace", workspace.Hostname))
+		logger.Debug("workspace access authorization successful", logz.WorkspaceName(workspace.WorkspaceName))
 
 		// Create JWT for cookie
 		signedJwt, err := generateJWT(config.SigningKey, workspace.WorkspaceID, token.ExpiresIn)
 		if err != nil {
-			errorResponse(log, fmt.Errorf("could not generate jwt %s", err), w)
+			w.WriteHeader(http.StatusBadRequest)
+			logger.Error("failed to generate jwt",
+				logz.Error(err),
+				logz.WorkspaceName(workspace.WorkspaceName),
+			)
 			return
 		}
 
@@ -111,7 +130,8 @@ func handleRedirect(
 		http.Redirect(w, r, stateURI, http.StatusTemporaryRedirect)
 		return
 	} else {
-		errorResponse(log, fmt.Errorf("could not find auth code"), w)
+		w.WriteHeader(http.StatusBadRequest)
+		logger.Error("failed to find auth code in the request")
 		return
 	}
 }
@@ -133,11 +153,6 @@ func getHostnameFromState(state string) (string, error) {
 	hostElements := strings.Split(u.Hostname(), ":")
 
 	return hostElements[0], nil
-}
-
-func errorResponse(log *zap.Logger, err error, w http.ResponseWriter) {
-	w.WriteHeader(http.StatusBadRequest)
-	log.Error("error processing request", zap.Error(err))
 }
 
 func redirectToAuthURL(config *Config, w http.ResponseWriter, r *http.Request) {
@@ -178,10 +193,10 @@ func getWorkspaceFromURL(url string, upstreams *upstream.Tracker) (*upstream.Hos
 		return nil, fmt.Errorf("could not parse workspace from host %s", err)
 	}
 
-	upstream, err := upstreams.GetByHostname(hostname)
+	upstreamHostMapping, err := upstreams.GetByHostname(hostname)
 	if err != nil {
 		return nil, fmt.Errorf("could not find upstream workspace %s", err)
 	}
 
-	return upstream, nil
+	return upstreamHostMapping, nil
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/hasura/go-graphql-client"
+	"go.uber.org/zap"
 )
 
 type API interface {
@@ -36,6 +37,7 @@ type tokenTransport struct {
 	Transport http.RoundTripper
 	Token     string
 	tokenType TokenType
+	logger    *zap.Logger
 }
 
 func (att tokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -50,11 +52,12 @@ func (att tokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return att.Transport.RoundTrip(req)
 }
 
-func NewClient(accessToken, baseURL string, tokenType TokenType) *Client {
+func NewClient(logger *zap.Logger, accessToken, baseURL string, tokenType TokenType) *Client {
 	client := &http.Client{
 		Transport: http.DefaultTransport,
 	}
 	client.Transport = tokenTransport{
+		logger:    logger,
 		tokenType: tokenType,
 		Transport: client.Transport,
 		Token:     accessToken,

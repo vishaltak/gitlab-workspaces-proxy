@@ -9,6 +9,7 @@ RUN go mod download
 
 COPY ./main.go .
 COPY ./pkg ./pkg
+COPY ./internal ./internal
 
 RUN CGO_ENABLED=0 go build -o proxy main.go
 

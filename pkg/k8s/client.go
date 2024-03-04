@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -32,9 +33,10 @@ type Client interface {
 
 type KubernetesClient struct {
 	clientset *kubernetes.Clientset
+	logger    *zap.Logger
 }
 
-func New(kubeconfig string) (*KubernetesClient, error) {
+func New(logger *zap.Logger, kubeconfig string) (*KubernetesClient, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		return nil, err
@@ -45,7 +47,10 @@ func New(kubeconfig string) (*KubernetesClient, error) {
 		return nil, err
 	}
 
-	return &KubernetesClient{clientset}, nil
+	return &KubernetesClient{
+		logger:    logger,
+		clientset: clientset,
+	}, nil
 }
 
 func (c *KubernetesClient) GetService(ctx context.Context, callback func(InformerAction, *v1.Service)) error {
@@ -81,9 +86,6 @@ func (c *KubernetesClient) GetService(ctx context.Context, callback func(Informe
 			callback(InformerActionUpdate, svc)
 		},
 	})
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }

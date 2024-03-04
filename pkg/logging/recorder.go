@@ -38,7 +38,7 @@ func (r *responseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if !ok {
 		// The underlying connection does not support the Hijacker interface
 		// Call the next handler with the original response writer
-		return nil, nil, fmt.Errorf("Hijack not supported")
+		return nil, nil, fmt.Errorf("hijack not supported")
 	}
 
 	return hj.Hijack()

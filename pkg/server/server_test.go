@@ -129,13 +129,15 @@ func TestStartServer(t *testing.T) {
 
 			res, err := http.Get(fmt.Sprintf("http://localhost:%d", tr.port))
 			require.Nil(t, err)
-			defer res.Body.Close()
 
 			result, err := io.ReadAll(res.Body)
 			require.Nil(t, err)
-
 			require.Equal(t, tr.expectedStatusCode, res.StatusCode)
 			require.Equal(t, tr.expectedBody, string(result))
+			closeErr := res.Body.Close()
+			if closeErr != nil {
+				t.Error(closeErr)
+			}
 		})
 	}
 }
@@ -169,7 +171,9 @@ func TestMetricsPath(t *testing.T) {
 
 	res, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", port))
 	require.Nil(t, err)
-	defer res.Body.Close()
-
 	require.Equal(t, http.StatusOK, res.StatusCode)
+	closeErr := res.Body.Close()
+	if closeErr != nil {
+		t.Error(closeErr)
+	}
 }

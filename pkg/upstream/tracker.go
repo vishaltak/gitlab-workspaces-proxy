@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/internal/logz"
 	"go.uber.org/zap"
 )
 
@@ -31,7 +32,7 @@ func NewTracker(logger *zap.Logger) *Tracker {
 	}
 }
 
-var ErrNotFound = errors.New("upstream not found")
+var ErrNotFound = errors.New("host mapping not found")
 
 func (u *Tracker) GetByHostname(name string) (*HostMapping, error) {
 	u.RLock()
@@ -58,14 +59,27 @@ func (u *Tracker) Add(mapping HostMapping) {
 	defer u.Unlock()
 	u.upstreamsByHost[mapping.Hostname] = mapping
 	u.upstreamsByName[mapping.WorkspaceName] = mapping
-	u.logger.Info("New upstream added", zap.String("host", mapping.Hostname), zap.String("backend", mapping.Backend), zap.Int32("backend_port", mapping.BackendPort))
+	u.logger.Info("host mapping added",
+		logz.HostMappingHostname(mapping.Hostname),
+		logz.HostMappingBackend(mapping.Backend),
+		logz.HostMappingBackendPort(mapping.BackendPort),
+		logz.HostMappingBackendProtocol(mapping.BackendProtocol),
+		logz.WorkspaceName(mapping.WorkspaceName),
+	)
 }
 
 func (u *Tracker) DeleteByHostname(name string) {
 	u.Lock()
 	defer u.Unlock()
-	workspaceName := u.upstreamsByHost[name].WorkspaceName
+	mapping := u.upstreamsByHost[name]
+	workspaceName := mapping.WorkspaceName
 	delete(u.upstreamsByName, workspaceName)
 	delete(u.upstreamsByHost, name)
-	u.logger.Info("Upstream removed", zap.String("host", name))
+	u.logger.Info("host mapping removed",
+		logz.HostMappingHostname(mapping.Hostname),
+		logz.HostMappingBackend(mapping.Backend),
+		logz.HostMappingBackendPort(mapping.BackendPort),
+		logz.HostMappingBackendProtocol(mapping.BackendProtocol),
+		logz.WorkspaceName(mapping.WorkspaceName),
+	)
 }

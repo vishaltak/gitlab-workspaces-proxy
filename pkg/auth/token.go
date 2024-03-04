@@ -31,6 +31,7 @@ func getToken(ctx context.Context, config *Config, code string) (*token, error) 
 	if err != nil {
 		return nil, err
 	}
+	// TODO: handle the returned error
 	defer res.Body.Close()
 
 	var tkn token
