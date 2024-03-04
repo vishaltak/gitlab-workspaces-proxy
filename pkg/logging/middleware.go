@@ -3,6 +3,7 @@ package logging
 import (
 	"net/http"
 
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/internal/logz"
 	"go.uber.org/zap"
 )
 
@@ -12,12 +13,13 @@ func NewMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 			recorder := newResponseRecorder(w)
 			next.ServeHTTP(recorder, r)
 
-			logger.Info("HTTP request processed",
-				zap.String("path", r.URL.Path),
-				zap.String("ip", r.RemoteAddr),
-				zap.Int("status", recorder.status),
-				zap.String("host", r.Host),
-				zap.String("method", r.Method),
+			logger.Info("processed HTTP request",
+				logz.HTTPPath(r.URL.Path),
+				logz.HTTPIp(r.RemoteAddr),
+				logz.HTTPStatus(recorder.status),
+				logz.HTTPHost(r.Host),
+				logz.HTTPMethod(r.Method),
+				logz.HTTPScheme(r.URL.Scheme),
 			)
 		})
 	}

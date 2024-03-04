@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/internal/logz"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/gitlab"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/upstream"
 	"go.uber.org/zap/zaptest"
@@ -50,7 +51,8 @@ func TestErrorResponse(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	logger := zaptest.NewLogger(t)
 	err := fmt.Errorf("new error occurred")
-	errorResponse(logger, err, recorder)
+	recorder.WriteHeader(http.StatusBadRequest)
+	logger.Error("error processing request", logz.Error(err))
 }
 
 func TestRedirectToAuthUrl(t *testing.T) {
@@ -84,11 +86,13 @@ func TestRedirectToAuthUrl(t *testing.T) {
 
 			redirectToAuthURL(config, recorder, request)
 			result := recorder.Result()
-			defer result.Body.Close()
 
 			require.Equal(t, http.StatusTemporaryRedirect, result.StatusCode)
-
 			require.Equal(t, tt.expectedURL, result.Header["Location"][0])
+			closeErr := result.Body.Close()
+			if closeErr != nil {
+				t.Error(closeErr)
+			}
 		})
 	}
 }
@@ -142,31 +146,31 @@ func TestMiddleware(t *testing.T) {
 		},
 		{
 			description:        "When a valid cookie is present should return the result",
-			request:            generateRequestWithCookie(generateToken(t, 10, "1"), "http://workspace1.workspaces.com"),
+			request:            generateRequestWithCookie(t, generateToken(t, 10, "1"), "https://workspace1.workspaces.com"),
 			upstreams:          []upstream.HostMapping{{Hostname: "workspace1.workspaces.com", WorkspaceID: "1"}},
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			description:        "When redirect uri is called without code throws an error",
-			request:            httptest.NewRequest(http.MethodGet, "http://workspaces.com/callback", nil),
+			request:            httptest.NewRequest(http.MethodGet, "https://workspaces.com/callback", nil),
 			upstreams:          []upstream.HostMapping{},
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
 			description:        "When redirect uri is called with code but without state throws an error",
-			request:            httptest.NewRequest(http.MethodGet, "http://workspaces.com/callback?code=123", nil),
+			request:            httptest.NewRequest(http.MethodGet, "https://workspaces.com/callback?code=123", nil),
 			upstreams:          []upstream.HostMapping{},
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
 			description:        "When redirect uri is called with code but without state throws an error",
-			request:            httptest.NewRequest(http.MethodGet, "http://workspaces.com/callback?code=123", nil),
+			request:            httptest.NewRequest(http.MethodGet, "https://workspaces.com/callback?code=123", nil),
 			upstreams:          []upstream.HostMapping{},
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
 			description:        "When redirect uri is called with code and state, redirects to state",
-			request:            httptest.NewRequest(http.MethodGet, "http://workspaces.com/callback?code=123&state=http://workspace1.workspaces.com", nil),
+			request:            httptest.NewRequest(http.MethodGet, "https://workspaces.com/callback?code=123&state=https://workspace1.workspaces.com", nil),
 			upstreams:          []upstream.HostMapping{{Hostname: "workspace1.workspaces.com"}},
 			expectedStatusCode: http.StatusTemporaryRedirect,
 		},
@@ -209,8 +213,11 @@ func TestMiddleware(t *testing.T) {
 			middleware.ServeHTTP(recorder, tr.request)
 
 			result := recorder.Result()
-			defer result.Body.Close()
 			require.Equal(t, tr.expectedStatusCode, result.StatusCode)
+			closeErr := result.Body.Close()
+			if closeErr != nil {
+				t.Error(closeErr)
+			}
 		})
 	}
 }

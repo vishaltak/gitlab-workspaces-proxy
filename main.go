@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"text/template"
 
+	"gitlab.com/remote-development/gitlab-workspaces-proxy/internal/logz"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/auth"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/config"
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/pkg/gitlab"
@@ -33,41 +34,41 @@ func main() { //nolint:cyclop
 
 	cfg, err := config.LoadConfig(*configFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading config file %s", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Error reading config file %s", err)
 		os.Exit(-1)
 	}
 
 	ctx := context.Background()
 
-	k8sClient, err := k8s.New(*kubeconfig)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating kubernetes client %s", err)
-		os.Exit(-1)
-	}
-
 	logConfig := zap.NewProductionConfig()
 	logConfig.Level, err = cfg.GetZapLevel()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading log level %s", err)
+		_, _ = fmt.Fprintf(os.Stderr, "failed to read log level %s", err)
 		os.Exit(-1)
 	}
 
 	logger, err := logConfig.Build()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating logger %s", err)
+		_, _ = fmt.Fprintf(os.Stderr, "failed to create logger %s", err)
 		os.Exit(-1)
 	}
 
 	defer func() {
 		err = logger.Sync()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error syncing logger %s", err)
+			_, _ = fmt.Fprintf(os.Stderr, "failed to sync logger %s", err)
 			return
 		}
 	}()
 
+	k8sClient, err := k8s.New(logger, *kubeconfig)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "failed to create kubernetes client %s", err)
+		os.Exit(-1)
+	}
+
 	apiFactory := func(accessToken string) gitlab.API {
-		return gitlab.NewClient(accessToken, cfg.Auth.Host, gitlab.BearerTokenType)
+		return gitlab.NewClient(logger, accessToken, cfg.Auth.Host, gitlab.BearerTokenType)
 	}
 
 	upstreamTracker := upstream.NewTracker(logger)
@@ -91,10 +92,19 @@ func main() { //nolint:cyclop
 		workspaceHostTemplate := svc.Annotations[workspaceHostTemplateAnnotation]
 		workspaceID := svc.Annotations[workspaceIDAnnotation]
 
+		if workspaceHostTemplate == "" {
+			logger.Error("workspace host template annotation not available on kubernetes service",
+				logz.ServiceName(svc.Name),
+				logz.ServiceNamespace(svc.Namespace),
+			)
+			return
+		}
+
 		if workspaceID == "" {
-			logger.Info("workspace ID not available",
-				zap.String("service_name", svc.Name),
-				zap.String("service_namespace", svc.Namespace))
+			logger.Error("workspace id annotation not available on kubernetes service",
+				logz.ServiceName(svc.Name),
+				logz.ServiceNamespace(svc.Namespace),
+			)
 			return
 		}
 
@@ -108,13 +118,13 @@ func main() { //nolint:cyclop
 		}
 	})
 	if err != nil {
-		logger.Error("Could not start informer", zap.Error(err))
+		logger.Error("failed to start informer", logz.Error(err))
 		return
 	}
 
 	err = s.Start(ctx)
 	if err != nil {
-		logger.Error("Could not start server", zap.Error(err))
+		logger.Error("failed to start server", logz.Error(err))
 	}
 }
 
@@ -122,13 +132,22 @@ func addPorts(workspaceID string, workspaceHostTemplate string, tracker *upstrea
 	for _, port := range svc.Spec.Ports {
 		t, err := template.New("workspaceHostTemplate").Parse(workspaceHostTemplate)
 		if err != nil {
-			logger.Error("Could not parse domain template", zap.Error(err))
+			logger.Error(
+				"failed to parse workspace host template", logz.Error(err),
+				logz.WorkspaceHostTemplate(workspaceHostTemplate),
+			)
 			return
 		}
 		var h bytes.Buffer
-		err = t.Execute(&h, map[string]string{"port": strconv.Itoa(port.TargetPort.IntValue())})
+		data := map[string]string{"port": strconv.Itoa(port.TargetPort.IntValue())}
+		err = t.Execute(&h, data)
 		if err != nil {
-			logger.Error("Could not parse domain template", zap.Error(err))
+			logger.Error(
+				"failed to patch values in workspace host template",
+				logz.Error(err),
+				logz.WorkspaceHostTemplate(workspaceHostTemplate),
+				logz.WorkspaceHostTemplateData(data),
+			)
 			return
 		}
 
