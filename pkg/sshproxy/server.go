@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"gitlab.com/remote-development/gitlab-workspaces-proxy/internal/logz"
@@ -82,24 +82,27 @@ func New(ctx context.Context, logger *zap.Logger, tracker *upstream.Tracker, ssh
 
 // handleSSHConnection should always be called in a goroutine.
 func (p *SSHProxy) handleSSHConnection(ctx context.Context, incomingConn net.Conn) {
+	workspaceName := "indeterminable"
+
+	// establish SSH connection channels
 	clientConn, clientChannel, clientReqChannel, err := ssh.NewServerConn(incomingConn, p.commonSSHConfig)
 	if err != nil {
 		p.log.Error("failed to create SSH connection", logz.Error(err))
 		return
 	}
+	defer p.closeConnection(clientConn, workspaceName)
 
 	if clientConn.Permissions == nil || clientConn.Permissions.Extensions == nil || clientConn.Permissions.Extensions["workspaceName"] == "" {
 		// TODO: log all fields - e.g. remote addr, permissions.extensions, etc.
 		p.log.Error("failed to find workspace name in connection-permission-extension")
-		p.closeConnection(incomingConn, "indeterminable")
 		return
 	}
 
-	workspaceName := clientConn.Permissions.Extensions["workspaceName"]
+	workspaceName = clientConn.Permissions.Extensions["workspaceName"]
+
 	connCtx, connCancel := context.WithCancel(ctx)
 	connCtx = context.WithValue(connCtx, workspaceNameCtxValueKey, workspaceName)
 	defer connCancel()
-	defer p.closeConnection(clientConn, workspaceName)
 
 	upstreamHostMapping, err := p.tracker.GetByWorkspaceName(workspaceName)
 	if err != nil {
@@ -107,75 +110,135 @@ func (p *SSHProxy) handleSSHConnection(ctx context.Context, incomingConn net.Con
 		return
 	}
 
-	remoteAddr := fmt.Sprintf("%s:%d", upstreamHostMapping.Backend, p.sshConfig.BackendPort)
-	remoteConn, err := net.Dial("tcp", remoteAddr)
-	if err != nil {
-		p.log.Error("failed to create backend connection", logz.Error(err), logz.WorkspaceName(workspaceName))
-		return
-	}
-	// before use, a handshake must be performed on the incoming net.Conn.
-	backendConn, backendChannel, backendReqChannel, err := ssh.NewClientConn(remoteConn, remoteAddr, &ssh.ClientConfig{
+	targetAddr := fmt.Sprintf("%s:%d", upstreamHostMapping.Backend, p.sshConfig.BackendPort)
+	sshClientConfig := &ssh.ClientConfig{
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		User:            p.sshConfig.BackendUsername,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(""),
 		},
-	})
-	if err != nil {
-		p.log.Error("failed to create backend connection handshake",
-			logz.Error(err),
-			logz.WorkspaceName(workspaceName),
-		)
-		return
+	}
+	// Connect to the target server.
+	targetConn, err := ssh.Dial("tcp", targetAddr, sshClientConfig)
+	defer p.closeConnection(targetConn, workspaceName)
+
+	// Handle SSH connection requests
+	go ssh.DiscardRequests(clientReqChannel)
+
+	// Forward SSH connection channels
+	for newChannel := range clientChannel {
+		// Handle only specific channel types.
+		if newChannel.ChannelType() != "session" {
+			newChannel.Reject(ssh.UnknownChannelType, "unsupported channel type")
+			continue
+		}
+
+		// Accept the channel request to establish the channel.
+		channel, requests, err := newChannel.Accept()
+		if err != nil {
+			p.log.Error("Failed to accept channel: %v", logz.Error(err))
+			continue
+		}
+
+		// Forward this channel to the target server.
+		targetChannel, targetRequests, err := targetConn.OpenChannel("session", nil)
+		if err != nil {
+			p.log.Error("Failed to open channel to target server: %v", logz.Error(err))
+			channel.Close()
+			continue
+		}
+
+		// Forward data between the channels.
+		go func() {
+			_, err := io.Copy(targetChannel, channel)
+			if err != nil {
+				p.log.Error("Error forwarding data to target server: %v", logz.Error(err))
+			}
+		}()
+
+		go func() {
+			_, err := io.Copy(channel, targetChannel)
+			if err != nil {
+				p.log.Error("Error forwarding data to client: %v", logz.Error(err))
+			}
+		}()
+
+		// Handle channel requests.
+		go func() {
+			for req := range targetRequests {
+				req.Reply(req.Type == "exit-status", nil)
+			}
+		}()
+
+		go func() {
+			for req := range requests {
+				req.Reply(req.Type == "exit-status", nil)
+			}
+		}()
 	}
 
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		p.copyRequests(connCtx, clientReqChannel, backendConn)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		p.copyRequests(connCtx, backendReqChannel, clientConn)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		p.copyData(connCtx, clientConn, backendChannel)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		p.copyData(connCtx, backendConn, clientChannel)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		waitErr := clientConn.Wait()
-		if waitErr != nil {
-			p.log.Error("failed to wait for client connection", logz.Error(waitErr), logz.WorkspaceName(workspaceName))
-			connCancel()
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		waitErr := backendConn.Wait()
-		if waitErr != nil {
-			p.log.Error("failed to wait for backend connection", logz.Error(waitErr), logz.WorkspaceName(workspaceName))
-			connCancel()
-		}
-	}()
-
-	wg.Wait()
+	//remoteConn, err := net.Dial("tcp", remoteAddr)
+	//if err != nil {
+	//	p.log.Error("failed to create backend connection", logz.Error(err), logz.WorkspaceName(workspaceName))
+	//	return
+	//}
+	//// before use, a handshake must be performed on the incoming net.Conn.
+	//backendConn, backendChannel, backendReqChannel, err := ssh.NewClientConn(remoteConn, remoteAddr, sshClientConfig)
+	//if err != nil {
+	//	p.log.Error("failed to create backend connection handshake",
+	//		logz.Error(err),
+	//		logz.WorkspaceName(workspaceName),
+	//	)
+	//	return
+	//}
+	//
+	//var wg sync.WaitGroup
+	//
+	//wg.Add(1)
+	//go func() {
+	//	defer wg.Done()
+	//	p.copyRequests(connCtx, clientReqChannel, backendConn)
+	//}()
+	//
+	//wg.Add(1)
+	//go func() {
+	//	defer wg.Done()
+	//	p.copyRequests(connCtx, backendReqChannel, clientConn)
+	//}()
+	//
+	//wg.Add(1)
+	//go func() {
+	//	defer wg.Done()
+	//	p.copyData(connCtx, clientConn, backendChannel)
+	//}()
+	//
+	//wg.Add(1)
+	//go func() {
+	//	defer wg.Done()
+	//	p.copyData(connCtx, backendConn, clientChannel)
+	//}()
+	//
+	//wg.Add(1)
+	//go func() {
+	//	defer wg.Done()
+	//	waitErr := clientConn.Wait()
+	//	if waitErr != nil {
+	//		p.log.Error("failed to wait for client connection", logz.Error(waitErr), logz.WorkspaceName(workspaceName))
+	//		connCancel()
+	//	}
+	//}()
+	//
+	//wg.Add(1)
+	//go func() {
+	//	defer wg.Done()
+	//	waitErr := backendConn.Wait()
+	//	if waitErr != nil {
+	//		p.log.Error("failed to wait for backend connection", logz.Error(waitErr), logz.WorkspaceName(workspaceName))
+	//		connCancel()
+	//	}
+	//}()
+	//
+	//wg.Wait()
 }
 
 func (p *SSHProxy) Start(ctx context.Context, listenAddr string, readyCh chan<- struct{}, stopCh chan<- struct{}) error {
@@ -185,6 +248,7 @@ func (p *SSHProxy) Start(ctx context.Context, listenAddr string, readyCh chan<- 
 		return fmt.Errorf("failed to start ssh proxy server: %v", err)
 	}
 
+	// question - why should this be in a goroutine. Should this be a defer?
 	go func() {
 		<-ctx.Done()
 		closeErr := listener.Close()
@@ -200,6 +264,7 @@ func (p *SSHProxy) Start(ctx context.Context, listenAddr string, readyCh chan<- 
 	for {
 		incomingConn, err := listener.Accept()
 		if err != nil {
+			// TODO: use ctx.Err() maybe ?
 			// We need to detect if the connection was closed due to the context being cancelled, if so
 			// then we shouldn't continue the loop
 			if errors.Is(err, net.ErrClosed) || strings.Contains(err.Error(), "use of closed network connection") {
