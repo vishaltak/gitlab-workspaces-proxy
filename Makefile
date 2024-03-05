@@ -36,7 +36,7 @@ test: bin/gotestsum-${GOTESTSUM_VERSION}
 	@./bin/gotestsum-${GOTESTSUM_VERSION} --no-summary=skipped --junitfile ./coverage.xml --format short-verbose -- -coverprofile=./coverage.txt -covermode=atomic ./...
 
 run: build
-	./proxy --config ./sample_config.yaml --kubeconfig $$HOME/.kube/config
+	./proxy --config ./sample_config.yaml --kubeconfig $$HOME/.kube/config --environment=development
 
 coverage:
 	go tool cover -func coverage.txt

@@ -24,17 +24,29 @@ import (
 const (
 	workspaceHostTemplateAnnotation = "workspaces.gitlab.com/host-template"
 	workspaceIDAnnotation           = "workspaces.gitlab.com/id"
+	productionEnvironment           = "production"
+	developmentEnvironment          = "development"
 )
 
 func main() { //nolint:cyclop
 	configFile := flag.String("config", "", "The config file to use")
 	kubeconfig := flag.String("kubeconfig", "", "The kubernetes config file")
+	environment := productionEnvironment
+	flag.Func("environment", "Setting the environment. Used to configure settings for local development. Defaults to \"production\". Acceptable values are \"production\" and \"development\".", func(value string) error {
+		switch value {
+		case productionEnvironment, developmentEnvironment:
+			environment = value
+		default:
+			return fmt.Errorf("parse error")
+		}
+		return nil
+	})
 
 	flag.Parse()
 
 	cfg, err := config.LoadConfig(*configFile)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "Error reading config file %s", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Error reading config file %v: %s", *configFile, err)
 		os.Exit(-1)
 	}
 
@@ -110,9 +122,9 @@ func main() { //nolint:cyclop
 
 		switch action {
 		case k8s.InformerActionAdd:
-			addPorts(workspaceID, workspaceHostTemplate, upstreamTracker, svc, logger)
+			addPorts(workspaceID, workspaceHostTemplate, upstreamTracker, svc, logger, environment)
 		case k8s.InformerActionUpdate:
-			addPorts(workspaceID, workspaceHostTemplate, upstreamTracker, svc, logger)
+			addPorts(workspaceID, workspaceHostTemplate, upstreamTracker, svc, logger, environment)
 		case k8s.InformerActionDelete:
 			upstreamTracker.DeleteByHostname(workspaceHostTemplate)
 		}
@@ -128,7 +140,7 @@ func main() { //nolint:cyclop
 	}
 }
 
-func addPorts(workspaceID string, workspaceHostTemplate string, tracker *upstream.Tracker, svc *v1.Service, logger *zap.Logger) {
+func addPorts(workspaceID string, workspaceHostTemplate string, tracker *upstream.Tracker, svc *v1.Service, logger *zap.Logger, environment string) {
 	for _, port := range svc.Spec.Ports {
 		t, err := template.New("workspaceHostTemplate").Parse(workspaceHostTemplate)
 		if err != nil {
@@ -150,11 +162,15 @@ func addPorts(workspaceID string, workspaceHostTemplate string, tracker *upstrea
 			)
 			return
 		}
+		backend := fmt.Sprintf("%s.%s", svc.ObjectMeta.Name, svc.ObjectMeta.Namespace)
+		if environment == developmentEnvironment {
+			backend = "localhost"
+		}
 
 		tracker.Add(upstream.HostMapping{
 			Hostname:        h.String(),
 			BackendPort:     port.Port,
-			Backend:         fmt.Sprintf("%s.%s", svc.ObjectMeta.Name, svc.ObjectMeta.Namespace),
+			Backend:         backend,
 			BackendProtocol: "http",
 			WorkspaceID:     workspaceID,
 			WorkspaceName:   svc.ObjectMeta.Name,

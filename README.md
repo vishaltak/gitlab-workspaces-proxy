@@ -203,12 +203,33 @@ auth:
   redirect_uri: http://127.0.0.1:9876/auth/callback
   signing_key: passwordpassword
   protocol: http
-port: 9876
 metrics_path: "/metrics"
+http:
+  enabled: true
+  port: 9872
+ssh:
+  backend_port: 60022
+  backend_username: gitlab-workspaces
+  enabled: true
+  host_key: |-
+    -----BEGIN OPENSSH PRIVATE KEY-----
+    ENTER_PRIVATE_KEY_HERE
+    -----END OPENSSH PRIVATE KEY-----
+  port: 2200
 EOT
 
-# run
+# run server
 make
+
+# update the workspace name where the traffic should be proxied
+export WORKSPACE_NAME="UPDATE-NAME"
+export WORKSPACE_NAMESPACE="UPDATE-NAMESPACE"
+
+# port-forward workspace service
+kubectl -n "${WORKSPACE_NAMESPACE}" port-forward "svc/${WORKSPACE_NAME}" 60022:60022
+
+# connect from ssh client
+ssh "${WORKSPACE_NAME}"@localhost -p 2200
 ```
 
 ### Local Installation Instructions
